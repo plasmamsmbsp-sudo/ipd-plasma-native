@@ -26,16 +26,22 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Generate Android Native Project Structure
+      - name: Generate & Configure Android Native Project
         run: |
           flutter create --org com.kencanaagri.ipdplasma --project-name ipd_plasma_native .
           
-          # Tambahkan izin Kamera, GPS, dan Penyimpanan ke AndroidManifest.xml
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          sed -i 's/<application/<uses-permission android:name="android.permission.CAMERA"\/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"\/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"\/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"\/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"\/>\n    <application/' $MANIFEST
-          
-          # Ubah label nama aplikasi di HP menjadi IPD PLASMA
+          sed -i 's/<application/<uses-permission android:name="android.permission.INTERNET"\/>\n    <uses-permission android:name="android.permission.CAMERA"\/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"\/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"\/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"\/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"\/>\n    <application/' $MANIFEST
           sed -i 's/android:label="ipd_plasma_native"/android:label="IPD PLASMA"/' $MANIFEST
+
+          # Pastikan minSdk 23 dan compileSdk 34 agar semua plugin native (pdfrx, gps, sqflite) kompilasi mulus
+          GRADLE="android/app/build.gradle"
+          if [ -f "$GRADLE" ]; then
+            sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/g' $GRADLE
+            sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 23/g' $GRADLE
+            sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 34/g' $GRADLE
+            sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 34/g' $GRADLE
+          fi
 
       - name: Install Dependencies
         run: flutter pub get
