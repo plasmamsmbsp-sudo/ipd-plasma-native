@@ -33,7 +33,7 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Generate & Configure Android Native Project + Kencana Icon
+      - name: Generate Android Project & Kencana Official Icon
         run: |
           flutter create --org com.kencanaagri.ipdplasma --project-name ipd_plasma_native .
           
@@ -41,7 +41,6 @@ jobs:
           sed -i 's/<application/<uses-permission android:name="android.permission.INTERNET"\/>\n    <uses-permission android:name="android.permission.CAMERA"\/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"\/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"\/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"\/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"\/>\n    <application/' $MANIFEST
           sed -i 's/android:label="ipd_plasma_native"/android:label="IPD PLASMA"/' $MANIFEST
 
-          # Set minSdk = 24 untuk dukungan plugin suara flutter_tts
           if [ -f "android/app/build.gradle.kts" ]; then
             sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 24/g' android/app/build.gradle.kts
           fi
@@ -50,7 +49,6 @@ jobs:
             sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 24/g' android/app/build.gradle
           fi
 
-          # Naikkan versi Kotlin Gradle Plugin ke 2.1.0 agar kompatibel dengan flutter_tts
           if [ -f "android/settings.gradle.kts" ]; then
             sed -i -E 's/id\("org\.jetbrains\.kotlin\.android"\)[[:space:]]+version[[:space:]]+"[^"]+"/id("org.jetbrains.kotlin.android") version "2.1.0"/g' android/settings.gradle.kts
           fi
@@ -59,20 +57,26 @@ jobs:
           fi
 
           python3 -c '
-          import os
+          import os, math
           from PIL import Image, ImageDraw
           sizes = {"mipmap-mdpi": 48, "mipmap-hdpi": 72, "mipmap-xhdpi": 96, "mipmap-xxhdpi": 144, "mipmap-xxxhdpi": 192}
           for folder, sz in sizes.items():
               p = f"android/app/src/main/res/{folder}"
               os.makedirs(p, exist_ok=True)
-              img = Image.new("RGBA", (sz, sz), (27, 94, 32, 255))
+              img = Image.new("RGBA", (sz, sz), (242, 245, 249, 255))
               d = ImageDraw.Draw(img)
-              m = int(sz * 0.08)
-              d.rounded_rectangle([m, m, sz-m, sz-m], radius=int(sz*0.2), fill=(27, 94, 32, 255), outline=(251, 192, 45, 255), width=max(2, int(sz*0.05)))
-              c = sz // 2
-              r = int(sz * 0.28)
-              d.polygon([(c, c-r), (c+r, c), (c, c+r), (c-r, c)], fill=(251, 192, 45, 255))
-              d.ellipse([c-int(r*0.4), c-int(r*0.4), c+int(r*0.4), c+int(r*0.4)], fill=(27, 94, 32, 255))
+              cx, cy = sz * 0.5, sz * 0.62
+              r_out = sz * 0.42
+              d.pieslice([cx - r_out, cy - r_out, cx + r_out, cy + r_out], 195, 345, fill=(10, 104, 54, 255))
+              r_in = sz * 0.14
+              d.ellipse([cx - r_in, cy - r_in*0.6, cx + r_in, cy + r_in*1.4], fill=(242, 245, 249, 255))
+              for ang in [-55, -28, 0, 28, 55]:
+                  rad = math.radians(ang - 90)
+                  x2 = cx + math.cos(rad) * (r_out * 0.85)
+                  y2 = cy + math.sin(rad) * (r_out * 0.85)
+                  d.line([(cx, cy - sz*0.02), (x2, y2)], fill=(247, 227, 0, 255), width=max(2, int(sz*0.04)))
+              bar_y1, bar_y2 = int(sz * 0.65), int(sz * 0.86)
+              d.rounded_rectangle([int(sz*0.14), bar_y1, int(sz*0.86), bar_y2], radius=max(2, int(sz*0.03)), fill=(179, 142, 12, 255))
               img.save(f"{p}/ic_launcher.png")
           ' || true
 
