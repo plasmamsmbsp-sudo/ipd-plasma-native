@@ -1,15 +1,11 @@
 import 'dart:io';
-import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:excel/excel.dart' as xl;
 import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
-import 'package:pdfrx/pdfrx.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import 'database_helper.dart';
 
@@ -145,14 +141,18 @@ class _RiwayatDanEksporPageState extends State<RiwayatDanEksporPage> {
       xl.TextCellValue('Rata-rata Mutu (%)'),
     ]);
 
-    Map<String, List>> perMandor = {};
+    var perMandor = <String, dynamic>{};
 
     for (int i = 0; i < _dataInspeksi.length; i++) {
       final row = _dataInspeksi[i];
       final temuan = Map<String, dynamic>.from(jsonDecode(row['temuan_json']));
       final gps = (row['lat'] != null) ? '${row['lat']}, ${row['lng']}' : '-';
 
-      perMandor.putIfAbsent(row['mandor'], () => []).add(row);
+      final namaMandor = row['mandor'].toString();
+      if (!perMandor.containsKey(namaMandor)) {
+        perMandor[namaMandor] = >[];
+      }
+      (perMandor[namaMandor] as List>).add(row);
 
       sheetRekap.appendRow([
         xl.IntCellValue(i + 1),
@@ -178,7 +178,8 @@ class _RiwayatDanEksporPageState extends State<RiwayatDanEksporPage> {
       ]);
     }
 
-    perMandor.forEach((mandor, list) {
+    perMandor.forEach((mandor, rawList) {
+      final list = rawList as List>;
       int sumDenda = list.fold(0, (s, e) => s + (e['total_denda'] as int));
       double avgMutu = list.fold(0.0, (s, e) => s + (e['nilai_mutu'] as num).toDouble()) / list.length;
       sheetRingkasanMandor.appendRow([
@@ -222,7 +223,7 @@ class _RiwayatDanEksporPageState extends State<RiwayatDanEksporPage> {
       sb.writeln('• *${r['afdeling']} Blok ${r['blok']}* (Ancak ${r['no_ancak']}) - *${r['pemanen']}*');
       sb.writeln('  Mandor: ${r['mandor']} | Mutu: ${r['nilai_mutu']}% | Denda: ${fmtRp.format(r['total_denda'])}');
       final temuan = Map<String, dynamic>.from(jsonDecode(r['temuan_json']));
-      List<String> rincian = [];
+      var rincian = <String>[];
       for (var sop in daftarParameterSop) {
         int qty = (temuan[sop.kode] ?? 0) as int;
         if (qty > 0) rincian.add('${sop.nama}: $qty ${sop.satuan}');
@@ -331,199 +332,3 @@ class _RiwayatDanEksporPageState extends State<RiwayatDanEksporPage> {
     );
   }
 }
-
-class PetaBlokGpsPage extends StatefulWidget {
-  const PetaBlokGpsPage({super.key});
-
-  @override
-  State<PetaBlokGpsPage> createState() => _PetaBlokGpsPageState();
-}
-
-class _PetaBlokGpsPageState extends State<PetaBlokGpsPage> {
-  String? _pdfPath;
-  Position? _gpsSekarang;
-  bool _sedangRekamJalur = false;
-  StreamSubscription<Position>? _gpsSub;
-  String _namaSesi = '';
-  int _jumlahTitikTerekam = 0;
-
-  Future<void> _pilihPetaPdf() async {
-    FilePickerResult? res = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
-    if (res != null && res.files.single.path != null) {
-      setState(() => _pdfPath = res.files.single.path);
-    }
-  }
-
-  Future<void> _cekGps() async {
-    try {
-      final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-      if (mounted) setState(() => _gpsSekarang = pos);
-    } catch (_) {}
-  }
-
-  void _toggleRekamJalur() {
-    if (_sedangRekamJalur) {
-      _gpsSub?.cancel();
-      setState(() => _sedangRekamJalur = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Rekam jalur dihentikan. Total $_jumlahTitikTerekam titik GPS tersimpan.')),
-      );
-    } else {
-      _namaSesi = 'Inspeksi_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}';
-      _jumlahTitikTerekam = 0;
-      setState(() => _sedangRekamJalur = true);
-
-      _gpsSub = Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 10),
-      ).listen((Position pos) async {
-        await DatabaseHelper.instance.insertGpsPoint(_namaSesi, pos.latitude, pos.longitude);
-        if (mounted) {
-          setState(() {
-            _gpsSekarang = pos;
-            _jumlahTitikTerekam++;
-          });
-        }
-      });
-    }
-  }
-
-  Future<void> _eksporGpsTrackExcel() async {
-    final tracks = await DatabaseHelper.instance.getGpsTracks();
-    if (tracks.isEmpty) return;
-
-    var excel = xl.Excel.createExcel();
-    xl.Sheet sheet = excel['JEJAK_GPS_INSPEKSI'];
-    excel.delete('Sheet1');
-    sheet.appendRow([xl.TextCellValue('Sesi'), xl.TextCellValue('Waktu'), xl.TextCellValue('Latitude'), xl.TextCellValue('Longitude')]);
-    for (var t in tracks) {
-      sheet.appendRow([
-        xl.TextCellValue(t['sesi']),
-        xl.TextCellValue(t['waktu']),
-        xl.DoubleCellValue((t['lat'] as num).toDouble()),
-        xl.DoubleCellValue((t['lng'] as num).toDouble()),
-      ]);
-    }
-    final dir = await getTemporaryDirectory();
-    final path = p.join(dir.path, 'GPS_TRACK_IPD_${DateFormat('yyyyMMdd').format(DateTime.now())}.xlsx');
-    final bytes = excel.save();
-    if (bytes != null) {
-      await File(path).writeAsBytes(bytes);
-      await Share.shareXFiles([XFile(path)], text: 'Rekam Jalur GPS Inspeksi Lapangan');
-    }
-  }
-
-  @override
-  void dispose() {
-    _gpsSub?.cancel();
-    super.dispose();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _cekGps();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Peta Blok PDF & Track GPS', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        actions: [
-          IconButton(onPressed: _eksporGpsTrackExcel, icon: const Icon(Icons.route, color: Color(0xFFFBC02D)), tooltip: 'Ekspor Titik GPS'),
-          IconButton(onPressed: _pilihPetaPdf, icon: const Icon(Icons.folder_open), tooltip: 'Buka Peta PDF'),
-        ],
-      ),
-      body: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            color: const Color(0xFF1B5E20).withOpacity(0.1),
-            padding: const EdgeInsets.all(10),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  _gpsSekarang != null
-                      ? 'GPS: ${_gpsSekarang!.latitude.toStringAsFixed(6)}, ${_gpsSekarang!.longitude.toStringAsFixed(6)}'
-                      : 'Mencari sinyal satelit GPS...',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1B5E20)),
-                ),
-                ElevatedButton.icon(
-                  onPressed: _toggleRekamJalur,
-                  icon: Icon(_sedangRekamJalur ? Icons.stop : Icons.fiber_manual_record, size: 16),
-                  label: Text(_sedangRekamJalur ? 'Stop ($_jumlahTitikTerekam)' : 'Rekam Jalur', style: const TextStyle(fontSize: 12)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _sedangRekamJalur ? Colors.red : const Color(0xFF1B5E20),
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: _pdfPath == null
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.map, size: 64, color: Color(0xFF1B5E20)),
-                          const SizedBox(height: 12),
-                          const Text(
-                            'Muat Peta Kerja Afdeling / Blok Plasma Wanggarasi (format PDF) untuk navigasi offline di lapangan.',
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 12),
-                          ElevatedButton.icon(
-                            onPressed: _pilihPetaPdf,
-                            icon: const Icon(Icons.picture_as_pdf),
-                            label: const Text('Pilih File Peta PDF'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                : PdfViewer.file(_pdfPath!),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class MasterDanSyncPage extends StatefulWidget {
-  const MasterDanSyncPage({super.key});
-
-  @override
-  State<MasterDanSyncPage> createState() => _MasterDanSyncPageState();
-}
-
-class _MasterDanSyncPageState extends State<MasterDanSyncPage> {
-  final _urlCtrl = TextEditingController();
-  final _asistenCtrl = TextEditingController();
-  final _tambahItemCtrl = TextEditingController();
-  String _tipeDipilih = 'BLOK';
-  List<String> _daftarItem = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _muatSemua();
-  }
-
-  Future<void> _muatSemua() async {
-    final url = await DatabaseHelper.instance.getSetting('gsheet_url');
-    final asisten = await DatabaseHelper.instance.getSetting('asisten_default');
-    final items = await DatabaseHelper.instance.getMasterByTipe(_tipeDipilih);
-    if (mounted) {
-      setState(() {
-        _urlCtrl.text = url;
-        _asistenCtrl.text = asisten;
-        _daftarItem = items;
-      });
-    }
-  }
-
-  @o
