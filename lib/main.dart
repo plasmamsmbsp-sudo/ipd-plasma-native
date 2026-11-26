@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'page_input.dart';
-import 'page_rekap_peta.dart';
+import 'package:flutter/material.dart';
+import 'page_input.dart';
+import 'page_rekap.dart';
+import 'page_peta_master.dart';
+
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
