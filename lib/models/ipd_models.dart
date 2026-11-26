@@ -210,13 +210,14 @@ class MasterDatabase {
         afdeling: map['afdeling'] ?? 'Afdeling Plasma BSP',
         asisten: map['asisten'] ?? 'Sukri',
         gasWebhookUrl: map['gasWebhookUrl'] ?? '',
-        daftarMandor: List<String>.from(map['daftarMandor'] ?? []),
-        daftarPemanen: (map['daftarPemanen'] as List? ?? [])
-            .map((e) => Map<String, String>.from(e))
-            .toList(),
-        daftarBlok: (map['daftarBlok'] as List? ?? [])
-            .map((e) => Map<String, dynamic>.from(e))
-            .toList(),
+              daftarMandor: List<String>.from(map['daftarMandor'] ?? []),
+      daftarPemanen: List>.from(
+        (map['daftarPemanen'] ?? []).map((x) => Map<String, dynamic>.from(x)),
+      ),
+      daftarBlok: List>.from(
+        (map['daftarBlok'] ?? []).map((x) => Map<String, dynamic>.from(x)),
+      ),
+        
       );
     } catch (_) {
       return null;
