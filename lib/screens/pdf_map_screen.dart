@@ -80,7 +80,6 @@ class _PdfMapScreenState extends State<PdfMapScreen> {
     setState(() => _currentPos = pos);
 
     if (autoZoom) {
-      // Toggle zoom in (2.8x) dan zoom out (1.0x) terpusat di area lokasi pengguna
       setState(() {
         _isZoomedIn = !_isZoomedIn;
         if (_isZoomedIn) {
@@ -122,7 +121,6 @@ class _PdfMapScreenState extends State<PdfMapScreen> {
 
   /// Konversi koordinat GPS ke posisi relatif di kanvas peta
   Offset _gpsToCanvasOffset(double lat, double lng) {
-    // Proyeksi relatif berbasis titik referensi pertama atau posisi saat ini
     final refLat = _currentPos?.latitude ?? lat;
     final refLng = _currentPos?.longitude ?? lng;
     final dx = 180.0 + ((lng - refLng) * 120000);
@@ -182,7 +180,6 @@ class _PdfMapScreenState extends State<PdfMapScreen> {
       ),
       body: Column(
         children: [
-          // Bar Info Koordinat & Status Trek
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             color: const Color(0xFFE8F5E9),
@@ -216,7 +213,6 @@ class _PdfMapScreenState extends State<PdfMapScreen> {
                     maxScale: 6.0,
                     child: Stack(
                       children: [
-                        // Layer 1: Peta PDF Blok
                         Container(
                           width: double.infinity,
                           height: double.infinity,
@@ -231,14 +227,14 @@ class _PdfMapScreenState extends State<PdfMapScreen> {
                                   ),
                                 ),
                         ),
-                        // Layer 2: Garis Lintasan Trek GPS
                         if (_trackCanvasPoints.length > 1)
                           CustomPaint(
                             size: Size.infinite,
                             painter: _TrackPainter(_trackCanvasPoints),
                           ),
-                        // Layer 3: Titik Temuan Inspeksi (Merah / Oranye / Kuning)
-                        ...widget.items.where((e) => e.lat != null && e.lng != null).map((item) {
+                        ...widget.items
+                            .where((InspeksiItem e) => e.lat != null && e.lng != null)
+                            .map<Widget>((InspeksiItem item) {
                           final offset = _gpsToCanvasOffset(item.lat!, item.lng!);
                           Color pinColor = Colors.amber;
                           if (item.tingkatRisiko == 'MERAH') pinColor = Colors.red;
@@ -266,7 +262,6 @@ class _PdfMapScreenState extends State<PdfMapScreen> {
                             ),
                           );
                         }),
-                        // Layer 4: Titik Lokasi Saya (Blue Dot Avenza Style)
                         if (_currentPos != null)
                           Positioned(
                             left: 170,
