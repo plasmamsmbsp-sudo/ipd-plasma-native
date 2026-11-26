@@ -29,7 +29,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.3'
+          flutter-version: '3.29.2'
           channel: 'stable'
           cache: true
 
@@ -41,13 +41,23 @@ jobs:
           sed -i 's/<application/<uses-permission android:name="android.permission.INTERNET"\/>\n    <uses-permission android:name="android.permission.CAMERA"\/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"\/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"\/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"\/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"\/>\n    <application/' $MANIFEST
           sed -i 's/android:label="ipd_plasma_native"/android:label="IPD PLASMA"/' $MANIFEST
 
-          GRADLE="android/app/build.gradle"
-          if [ -f "$GRADLE" ]; then
-            sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/g' $GRADLE
-            sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 23/g' $GRADLE
-            sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 34/g' $GRADLE
-            sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 34/g' $GRADLE
-          fi
+          # Paksa semua subproject plugin (termasuk geolocator_android) memakai compileSdk 35 & minSdk 23
+          cat << 'EOF' >> android/build.gradle.kts
+
+          subprojects {
+              afterEvaluate {
+                  if (extensions.findByName("android") != null) {
+                      extensions.configure<com.android.build.gradle.BaseExtension>("android") {
+                          compileSdkVersion(35)
+                          defaultConfig {
+                              minSdk = 23
+                              targetSdk = 35
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
 
       - name: Install Dependencies
         run: flutter pub get
