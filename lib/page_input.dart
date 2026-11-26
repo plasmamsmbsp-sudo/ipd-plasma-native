@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'database_helper.dart';
 import 'input_helper.dart';
 import 'input_widgets.dart';
+import 'splash_logo.dart';
 
 class FormInspeksiPage extends StatefulWidget {
   const FormInspeksiPage({super.key});
@@ -18,18 +19,23 @@ class _FormInspeksiPageState extends State {
   final _ptCtrl = TextEditingController(text: 'PT Kencana Agri - Plasma Wanggarasi');
   final _ancakCtrl = TextEditingController();
   final _pokokCtrl = TextEditingController(text: '25');
+  final _tapakCtrl = TextEditingController(text: '10');
+  final _bjrCtrl = TextEditingController(text: '16.0');
+  final _beratButirCtrl = TextEditingController(text: '12');
   final _pemanenCtrl = TextEditingController();
   final _asistenCtrl = TextEditingController(text: 'Sukri');
   final _catatanCtrl = TextEditingController();
 
-  var _listAfdeling = ['AFD BSP', 'AFD MSM', 'PT. STN'];
-  var _listBlok = ['A01', 'A02', 'B01', 'B02', 'C01', 'F15'];
-  var _listMandor = ['Mas Budi', 'Pak Candra', 'Pak Ramin', 'Bang Edi', 'Aldrianto Eka Putra'];
+  var _listAfdeling = ['Plasma BSP', 'Plasma MSM', 'PT. STN'];
+  var _listBlok = ['D001A', 'E0015', 'E0013', 'E0018A'];
+  var _listMandor = ['Albar Mooduto', 'Mas Budi', 'Pak Candra', 'Pak Ramin', 'Bang Edi'];
+  var _listKerani = ['Firman Hulopi', 'Aldrianto Eka Putra'];
   var _listPemanen = [];
 
-  String _selectedAfd = 'AFD BSP';
-  String _selectedBlok = 'A01';
-  String _selectedMandor = 'Mas Budi';
+  String _selectedAfd = 'Plasma BSP';
+  String _selectedBlok = 'D001A';
+  String _selectedMandor = 'Albar Mooduto';
+  String _selectedKerani = 'Firman Hulopi';
 
   DateTime _tanggal = DateTime.now();
   Position? _posisiGps;
@@ -52,6 +58,7 @@ class _FormInspeksiPageState extends State {
     final afd = List.from(await DatabaseHelper.instance.getMasterByTipe('AFDELING'));
     final blok = List.from(await DatabaseHelper.instance.getMasterByTipe('BLOK'));
     final mandor = List.from(await DatabaseHelper.instance.getMasterByTipe('MANDOR'));
+    final kerani = List.from(await DatabaseHelper.instance.getMasterByTipe('KERANI'));
     final pemanen = List.from(await DatabaseHelper.instance.getMasterByTipe('PEMANEN'));
     final asisten = (await DatabaseHelper.instance.getSetting('asisten_default')).toString();
 
@@ -69,8 +76,22 @@ class _FormInspeksiPageState extends State {
           _listMandor = mandor.map((e) => e.toString()).toList();
           if (!_listMandor.contains(_selectedMandor)) _selectedMandor = _listMandor.first;
         }
+        if (kerani.isNotEmpty) {
+          _listKerani = kerani.map((e) => e.toString()).toList();
+          if (!_listKerani.contains(_selectedKerani)) _selectedKerani = _listKerani.first;
+        }
         _listPemanen = pemanen.map((e) => e.toString()).toList();
         if (asisten.isNotEmpty) _asistenCtrl.text = asisten;
+      });
+      _muatBjrBlok(_selectedBlok);
+    }
+  }
+
+  Future _muatBjrBlok(String blok) async {
+    final bjr = await DatabaseHelper.instance.getBjrBlok(blok);
+    if (mounted) {
+      setState(() {
+        _bjrCtrl.text = bjr.toString();
       });
     }
   }
@@ -105,6 +126,30 @@ class _FormInspeksiPageState extends State {
     }
   }
 
+  double get _lossesBrondolanKg {
+    final int btr = _jumlahTemuan['P9'] ?? 0;
+    final double gr = double.tryParse(_beratButirCtrl.text) ?? 12.0;
+    return (btr * gr) / 1000.0;
+  }
+
+  double get _lossesBuahKg {
+    final int btp = _jumlahTemuan['P2'] ?? 0;
+    final int btg = _jumlahTemuan['P3'] ?? 0;
+    final double bjr = double.tryParse(_bjrCtrl.text) ?? 15.0;
+    return (btp + btg) * bjr;
+  }
+
+  double get _totalLossesKg => _lossesBrondolanKg + _lossesBuahKg;
+
+  double get _persenLosses {
+    final int tapak = int.tryParse(_tapakCtrl.text) ?? 0;
+    final int buahTinggal = (_jumlahTemuan['P2'] ?? 0) + (_jumlahTemuan['P3'] ?? 0);
+    final double bjr = double.tryParse(_bjrCtrl.text) ?? 15.0;
+    final double totalPotensiKg = (tapak + buahTinggal) * bjr;
+    if (totalPotensiKg <= 0) return 0.0;
+    return (_totalLossesKg / totalPotensiKg) * 100.0;
+  }
+
   int get _totalDenda {
     int total = 0;
     for (var item in daftarParameterSop) {
@@ -129,9 +174,12 @@ class _FormInspeksiPageState extends State {
 
     final namaPemanen = _pemanenCtrl.text.trim();
     if (!_listPemanen.any((e) => e.toString().toLowerCase() == namaPemanen.toLowerCase())) {
-      await DatabaseHelper.instance.addMaster('PEMANEN', namaPemanen);
+      await DatabaseHelper.instance.addMaster('PEMANEN', namaPemanen, extra: 0.0);
       _muatMasterData();
     }
+
+    final bjr = double.tryParse(_bjrCtrl.text) ?? 15.0;
+    final beratBtr = double.tryParse(_beratButirCtrl.text) ?? 12.0;
 
     final data = {
       'tanggal': DateFormat('yyyy-MM-dd').format(_tanggal),
@@ -140,8 +188,16 @@ class _FormInspeksiPageState extends State {
       'blok': _selectedBlok,
       'no_ancak': _ancakCtrl.text.trim(),
       'pokok_sampel': int.tryParse(_pokokCtrl.text) ?? 25,
+      'tapak_panen': int.tryParse(_tapakCtrl.text) ?? 0,
+      'bjr_blok': bjr,
+      'berat_brondolan_gr': beratBtr,
+      'losses_brondolan_kg': double.parse(_lossesBrondolanKg.toStringAsFixed(2)),
+      'losses_buah_kg': double.parse(_lossesBuahKg.toStringAsFixed(2)),
+      'total_losses_kg': double.parse(_totalLossesKg.toStringAsFixed(2)),
+      'persen_losses': double.parse(_persenLosses.toStringAsFixed(2)),
       'pemanen': namaPemanen,
       'mandor': _selectedMandor,
+      'kerani': _selectedKerani,
       'asisten': _asistenCtrl.text.trim(),
       'lat': _posisiGps?.latitude,
       'lng': _posisiGps?.longitude,
@@ -154,6 +210,37 @@ class _FormInspeksiPageState extends State {
     };
 
     await DatabaseHelper.instance.insertInspeksi(data);
+
+    if (_posisiGps != null) {
+      final sesi = 'Temuan_${DateFormat('yyyyMMdd').format(_tanggal)}';
+      if ((_jumlahTemuan['P2'] ?? 0) > 0 || (_jumlahTemuan['P3'] ?? 0) > 0) {
+        await DatabaseHelper.instance.insertGpsPoint(
+          sesi,
+          _posisiGps!.latitude,
+          _posisiGps!.longitude,
+          tipePin: 'MERAH',
+          keterangan: 'Blok $_selectedBlok ($namaPemanen): Buah Tinggal',
+        );
+      }
+      if ((_jumlahTemuan['P9'] ?? 0) > 0) {
+        await DatabaseHelper.instance.insertGpsPoint(
+          sesi,
+          _posisiGps!.latitude,
+          _posisiGps!.longitude,
+          tipePin: 'ORANYE',
+          keterangan: 'Blok $_selectedBlok ($namaPemanen): Brondolan Tidak Kutip (${_jumlahTemuan['P9']} btr)',
+        );
+      }
+      if ((_jumlahTemuan['P6'] ?? 0) > 0) {
+        await DatabaseHelper.instance.insertGpsPoint(
+          sesi,
+          _posisiGps!.latitude,
+          _posisiGps!.longitude,
+          tipePin: 'KUNING',
+          keterangan: 'Blok $_selectedBlok ($namaPemanen): Pelepah Tidak Susun (${_jumlahTemuan['P6']} pkk)',
+        );
+      }
+    }
 
     setState(() {
       _ancakCtrl.clear();
@@ -169,7 +256,7 @@ class _FormInspeksiPageState extends State {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Color(0xFF1B5E20),
-          content: Text('Data IPD tersimpan ke Database Offline!'),
+          content: Text('Data IPD, Losses & Pin Peta tersimpan!'),
         ),
       );
     }
@@ -181,11 +268,19 @@ class _FormInspeksiPageState extends State {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        title: const Row(
           children: [
-            Text('IPD PLASMA - KENCANA AGRI', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            Text('Plasma Wanggarasi • Native Android', style: TextStyle(fontSize: 11, color: Color(0xFFFBC02D))),
+            KencanaLogoWidget(size: 36),
+            SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('IPD PLASMA - KENCANA AGRI', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                  Text('Tim Plasma Area 4 • Wanggarasi', style: TextStyle(fontSize: 11, color: Color(0xFFFBC02D))),
+                ],
+              ),
+            ),
           ],
         ),
         actions: [
@@ -251,7 +346,11 @@ class _FormInspeksiPageState extends State {
                           isDense: true,
                           decoration: const InputDecoration(labelText: 'Blok', border: OutlineInputBorder()),
                           items: _listBlok.map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(fontSize: 13)))).toList(),
-                          onChanged: (v) => setState(() => _selectedBlok = v.toString()),
+                          onChanged: (v) {
+                            final blokBaru = v.toString();
+                            setState(() => _selectedBlok = blokBaru);
+                            _muatBjrBlok(blokBaru);
+                          },
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -265,38 +364,22 @@ class _FormInspeksiPageState extends State {
                     ],
                   ),
                   const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        flex: 3,
-                        child: Autocomplete(
-                          optionsBuilder: (TextEditingValue val) {
-                            final semua = _listPemanen.map((e) => e.toString()).toList();
-                            if (val.text.isEmpty) return semua;
-                            return semua.where((e) => e.toLowerCase().contains(val.text.toLowerCase()));
-                          },
-                          onSelected: (selection) => _pemanenCtrl.text = selection.toString(),
-                          fieldViewBuilder: (ctx, ctrl, focusNode, onSubmit) {
-                            ctrl.text = _pemanenCtrl.text;
-                            ctrl.addListener(() => _pemanenCtrl.text = ctrl.text);
-                            return TextField(
-                              controller: ctrl,
-                              focusNode: focusNode,
-                              decoration: const InputDecoration(labelText: 'Nama Pemanen *', border: OutlineInputBorder(), isDense: true),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        flex: 1,
-                        child: TextField(
-                          controller: _pokokCtrl,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(labelText: 'Pokok', border: OutlineInputBorder(), isDense: true),
-                        ),
-                      ),
-                    ],
+                  Autocomplete(
+                    optionsBuilder: (TextEditingValue val) {
+                      final semua = _listPemanen.map((e) => e.toString()).toList();
+                      if (val.text.isEmpty) return semua;
+                      return semua.where((e) => e.toLowerCase().contains(val.text.toLowerCase()));
+                    },
+                    onSelected: (selection) => _pemanenCtrl.text = selection.toString(),
+                    fieldViewBuilder: (ctx, ctrl, focusNode, onSubmit) {
+                      ctrl.text = _pemanenCtrl.text;
+                      ctrl.addListener(() => _pemanenCtrl.text = ctrl.text);
+                      return TextField(
+                        controller: ctrl,
+                        focusNode: focusNode,
+                        decoration: const InputDecoration(labelText: 'Nama Pemanen *', border: OutlineInputBorder(), isDense: true),
+                      );
+                    },
                   ),
                   const SizedBox(height: 10),
                   Row(
@@ -312,12 +395,20 @@ class _FormInspeksiPageState extends State {
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: TextField(
-                          controller: _asistenCtrl,
-                          decoration: const InputDecoration(labelText: 'Asisten Afdeling', border: OutlineInputBorder(), isDense: true),
+                        child: DropdownButtonFormField(
+                          value: _selectedKerani,
+                          isDense: true,
+                          decoration: const InputDecoration(labelText: 'Kerani Buah', border: OutlineInputBorder()),
+                          items: _listKerani.map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(fontSize: 13)))).toList(),
+                          onChanged: (v) => setState(() => _selectedKerani = v.toString()),
                         ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _asistenCtrl,
+                    decoration: const InputDecoration(labelText: 'Asisten Afdeling', border: OutlineInputBorder(), isDense: true),
                   ),
                   if (_posisiGps != null)
                     Padding(
@@ -330,6 +421,18 @@ class _FormInspeksiPageState extends State {
                 ],
               ),
             ),
+          ),
+          const SizedBox(height: 10),
+          KartuKalkulasiLosses(
+            bjrCtrl: _bjrCtrl,
+            beratButirCtrl: _beratButirCtrl,
+            pokokCtrl: _pokokCtrl,
+            tapakCtrl: _tapakCtrl,
+            lossesBrondolanKg: _lossesBrondolanKg,
+            lossesBuahKg: _lossesBuahKg,
+            totalLossesKg: _totalLossesKg,
+            persenLosses: _persenLosses,
+            onUbahInput: () => setState(() {}),
           ),
           const SizedBox(height: 10),
           KartuParameterSop(
@@ -366,8 +469,8 @@ class _FormInspeksiPageState extends State {
                       style: const TextStyle(color: Color(0xFFFBC02D), fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                     Text(
-                      'Skor Mutu Panen: ${_nilaiMutu.toStringAsFixed(1)}%',
-                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      'Mutu: ${_nilaiMutu.toStringAsFixed(1)}% | Losses: ${_persenLosses.toStringAsFixed(2)}%',
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
                     ),
                   ],
                 ),
