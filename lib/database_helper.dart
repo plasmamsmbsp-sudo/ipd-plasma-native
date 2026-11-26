@@ -18,7 +18,7 @@ class SopDendaItem {
   });
 }
 
-const List<SopDendaItem> daftarParameterSop = [
+const daftarParameterSop = [
   SopDendaItem(kode: 'P1', nama: 'Buah Mentah Dipanen', satuan: 'Jjg', dendaPerUnit: 10000, kategori: 'TPH'),
   SopDendaItem(kode: 'P2', nama: 'Buah Matang Tinggal di Pokok', satuan: 'Jjg', dendaPerUnit: 10000, kategori: 'ANCAK'),
   SopDendaItem(kode: 'P3', nama: 'Buah Tinggal di Gawangan/Piringan', satuan: 'Jjg', dendaPerUnit: 10000, kategori: 'ANCAK'),
@@ -36,13 +36,13 @@ class DatabaseHelper {
   static Database? _database;
   DatabaseHelper._init();
 
-  Future<Database> get database async {
+  Future get database async {
     if (_database != null) return _database!;
     _database = await _initDB('ipd_plasma_wanggarasi_v2.db');
     return _database!;
   }
 
-  Future<Database> _initDB(String filePath) async {
+  Future _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
     final path = p.join(dbPath, filePath);
     return await openDatabase(path, version: 1, onCreate: _createDB);
@@ -121,56 +121,56 @@ class DatabaseHelper {
     await db.insert('settings', {'kunci': 'asisten_default', 'nilai': 'Sukri'});
   }
 
-  Future<int> insertInspeksi(Map<String, dynamic> row) async {
-    final db = await instance.database;
+  Future insertInspeksi(Map<String, dynamic> row) async {
+    final Database db = await instance.database;
     return await db.insert('inspeksi', row);
   }
 
-  Future<List>> getAllInspeksi() async {
-    final db = await instance.database;
+  Future getAllInspeksi() async {
+    final Database db = await instance.database;
     return await db.query('inspeksi', orderBy: 'id DESC');
   }
 
-  Future<void> markSynced(int id) async {
-    final db = await instance.database;
+  Future markSynced(int id) async {
+    final Database db = await instance.database;
     await db.update('inspeksi', {'synced': 1}, where: 'id = ?', whereArgs: [id]);
   }
 
-  Future<int> deleteInspeksi(int id) async {
-    final db = await instance.database;
+  Future deleteInspeksi(int id) async {
+    final Database db = await instance.database;
     return await db.delete('inspeksi', where: 'id = ?', whereArgs: [id]);
   }
 
-  Future<List<String>> getMasterByTipe(String tipe) async {
-    final db = await instance.database;
+  Future getMasterByTipe(String tipe) async {
+    final Database db = await instance.database;
     final res = await db.query('master_data', where: 'tipe = ?', whereArgs: [tipe], orderBy: 'nama ASC');
-    return res.map((e) => e['nama'] as String).toList();
+    return res.map((e) => e['nama'].toString()).toList();
   }
 
-  Future<void> addMaster(String tipe, String nama) async {
-    final db = await instance.database;
+  Future addMaster(String tipe, String nama) async {
+    final Database db = await instance.database;
     await db.insert('master_data', {'tipe': tipe, 'nama': nama.trim()});
   }
 
-  Future<void> deleteMaster(String tipe, String nama) async {
-    final db = await instance.database;
+  Future deleteMaster(String tipe, String nama) async {
+    final Database db = await instance.database;
     await db.delete('master_data', where: 'tipe = ? AND nama = ?', whereArgs: [tipe, nama]);
   }
 
-  Future<String> getSetting(String kunci) async {
-    final db = await instance.database;
+  Future getSetting(String kunci) async {
+    final Database db = await instance.database;
     final res = await db.query('settings', where: 'kunci = ?', whereArgs: [kunci]);
-    if (res.isNotEmpty) return res.first['nilai'] as String;
+    if (res.isNotEmpty) return res.first['nilai'].toString();
     return '';
   }
 
-  Future<void> saveSetting(String kunci, String nilai) async {
-    final db = await instance.database;
+  Future saveSetting(String kunci, String nilai) async {
+    final Database db = await instance.database;
     await db.insert('settings', {'kunci': kunci, 'nilai': nilai}, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  Future<void> insertGpsPoint(String sesi, double lat, double lng) async {
-    final db = await instance.database;
+  Future insertGpsPoint(String sesi, double lat, double lng) async {
+    final Database db = await instance.database;
     await db.insert('gps_tracks', {
       'sesi': sesi,
       'waktu': DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now()),
@@ -179,8 +179,8 @@ class DatabaseHelper {
     });
   }
 
-  Future<List>> getGpsTracks() async {
-    final db = await instance.database;
+  Future getGpsTracks() async {
+    final Database db = await instance.database;
     return await db.query('gps_tracks', orderBy: 'id DESC', limit: 200);
   }
 }
