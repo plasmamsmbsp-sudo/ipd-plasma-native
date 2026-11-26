@@ -45,13 +45,6 @@ jobs:
                       }
                   }
               }
-              afterEvaluate { project ->
-                  if (project.hasProperty('android')) {
-                      project.android {
-                          compileSdkVersion 35
-                      }
-                  }
-              }
           }
           EOF
 
