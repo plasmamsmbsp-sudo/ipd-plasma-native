@@ -1,22 +1,20 @@
-import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:image/image.dart' as img;
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'database_helper.dart';
+import 'input_helper.dart';
+import 'input_widgets.dart';
 
 class FormInspeksiPage extends StatefulWidget {
   const FormInspeksiPage({super.key});
 
   @override
-  State<FormInspeksiPage> createState() => _FormInspeksiPageState();
+  State createState() => _FormInspeksiPageState();
 }
 
-class _FormInspeksiPageState extends State<FormInspeksiPage> {
+class _FormInspeksiPageState extends State {
   final _ptCtrl = TextEditingController(text: 'PT Kencana Agri - Plasma Wanggarasi');
   final _ancakCtrl = TextEditingController();
   final _pokokCtrl = TextEditingController(text: '25');
@@ -24,10 +22,10 @@ class _FormInspeksiPageState extends State<FormInspeksiPage> {
   final _asistenCtrl = TextEditingController(text: 'Sukri');
   final _catatanCtrl = TextEditingController();
 
-  List<String> _listAfdeling = ['AFD BSP', 'AFD MSM', 'PT. STN'];
-  List<String> _listBlok = ['A01', 'A02', 'B01', 'B02', 'C01', 'F15'];
-  List<String> _listMandor = ['Mas Budi', 'Pak Candra', 'Pak Ramin', 'Bang Edi', 'Aldrianto Eka Putra'];
-  List<String> _listPemanen = [];
+  var _listAfdeling = ['AFD BSP', 'AFD MSM', 'PT. STN'];
+  var _listBlok = ['A01', 'A02', 'B01', 'B02', 'C01', 'F15'];
+  var _listMandor = ['Mas Budi', 'Pak Candra', 'Pak Ramin', 'Bang Edi', 'Aldrianto Eka Putra'];
+  var _listPemanen = [];
 
   String _selectedAfd = 'AFD BSP';
   String _selectedBlok = 'A01';
@@ -38,10 +36,10 @@ class _FormInspeksiPageState extends State<FormInspeksiPage> {
   bool _sedangAmbilGps = false;
   bool _sedangProsesFoto = false;
 
-  final Map<String, int> _jumlahTemuan = {
+  final _jumlahTemuan = {
     for (var item in daftarParameterSop) item.kode: 0
   };
-  final List<String> _fotoPaths = [];
+  final _fotoPaths = [];
 
   @override
   void initState() {
@@ -50,97 +48,60 @@ class _FormInspeksiPageState extends State<FormInspeksiPage> {
     _ambilGps();
   }
 
-  Future<void> _muatMasterData() async {
-    final afd = await DatabaseHelper.instance.getMasterByTipe('AFDELING');
-    final blok = await DatabaseHelper.instance.getMasterByTipe('BLOK');
-    final mandor = await DatabaseHelper.instance.getMasterByTipe('MANDOR');
-    final pemanen = await DatabaseHelper.instance.getMasterByTipe('PEMANEN');
-    final asisten = await DatabaseHelper.instance.getSetting('asisten_default');
+  Future _muatMasterData() async {
+    final afd = List.from(await DatabaseHelper.instance.getMasterByTipe('AFDELING'));
+    final blok = List.from(await DatabaseHelper.instance.getMasterByTipe('BLOK'));
+    final mandor = List.from(await DatabaseHelper.instance.getMasterByTipe('MANDOR'));
+    final pemanen = List.from(await DatabaseHelper.instance.getMasterByTipe('PEMANEN'));
+    final asisten = (await DatabaseHelper.instance.getSetting('asisten_default')).toString();
 
     if (mounted) {
       setState(() {
         if (afd.isNotEmpty) {
-          _listAfdeling = afd;
+          _listAfdeling = afd.map((e) => e.toString()).toList();
           if (!_listAfdeling.contains(_selectedAfd)) _selectedAfd = _listAfdeling.first;
         }
         if (blok.isNotEmpty) {
-          _listBlok = blok;
+          _listBlok = blok.map((e) => e.toString()).toList();
           if (!_listBlok.contains(_selectedBlok)) _selectedBlok = _listBlok.first;
         }
         if (mandor.isNotEmpty) {
-          _listMandor = mandor;
+          _listMandor = mandor.map((e) => e.toString()).toList();
           if (!_listMandor.contains(_selectedMandor)) _selectedMandor = _listMandor.first;
         }
-        _listPemanen = pemanen;
+        _listPemanen = pemanen.map((e) => e.toString()).toList();
         if (asisten.isNotEmpty) _asistenCtrl.text = asisten;
       });
     }
   }
 
-  Future<void> _ambilGps() async {
+  Future _ambilGps() async {
     setState(() => _sedangAmbilGps = true);
-    try {
-      LocationPermission perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) {
-        perm = await Geolocator.requestPermission();
-      }
-      if (perm == LocationPermission.whileInUse || perm == LocationPermission.always) {
-        final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-        if (mounted) setState(() => _posisiGps = pos);
-      }
-    } catch (_) {}
-    if (mounted) setState(() => _sedangAmbilGps = false);
+    final pos = await InputHelper.ambilGpsSekarang();
+    if (mounted) {
+      setState(() {
+        if (pos != null) _posisiGps = pos as Position;
+        _sedangAmbilGps = false;
+      });
+    }
   }
 
-  Future<void> _ambilFotoDenganWatermark(ImageSource source) async {
-    final picker = ImagePicker();
-    final XFile? foto = await picker.pickImage(source: source, imageQuality: 80, maxWidth: 1280);
-    if (foto == null) return;
-
+  Future _ambilFoto(ImageSource source) async {
     setState(() => _sedangProsesFoto = true);
-    try {
-      final bytes = await File(foto.path).readAsBytes();
-      img.Image? decoded = img.decodeImage(bytes);
-
-      final dir = await getApplicationDocumentsDirectory();
-      final namaFile = 'IPD_${_selectedBlok}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final targetPath = p.join(dir.path, namaFile);
-
-      if (decoded != null) {
-        final waktuStr = DateFormat('dd/MM/yyyy HH:mm:ss').format(DateTime.now());
-        final gpsStr = _posisiGps != null
-            ? 'GPS: ${_posisiGps!.latitude.toStringAsFixed(6)}, ${_posisiGps!.longitude.toStringAsFixed(6)}'
-            : 'GPS: Offline';
-        final pemanenStr = _pemanenCtrl.text.trim().isEmpty ? '-' : _pemanenCtrl.text.trim();
-        final infoLine1 = 'IPD PLASMA | $_selectedAfd - BLOK $_selectedBlok (Ancak ${_ancakCtrl.text.trim()})';
-        final infoLine2 = 'Pemanen: $pemanenStr | Mandor: $_selectedMandor';
-        final infoLine3 = '$waktuStr | $gpsStr';
-
-        int boxHeight = 95;
-        int startY = decoded.height - boxHeight;
-        if (startY < 0) startY = 0;
-
-        img.fillRect(
-          decoded,
-          x1: 0,
-          y1: startY,
-          x2: decoded.width,
-          y2: decoded.height,
-          color: img.ColorRgba8(15, 45, 18, 200),
-        );
-
-        img.drawString(decoded, infoLine1, font: img.arial24, x: 16, y: startY + 10, color: img.ColorRgb8(251, 192, 45));
-        img.drawString(decoded, infoLine2, font: img.arial14, x: 16, y: startY + 42, color: img.ColorRgb8(255, 255, 255));
-        img.drawString(decoded, infoLine3, font: img.arial14, x: 16, y: startY + 64, color: img.ColorRgb8(220, 255, 220));
-
-        await File(targetPath).writeAsBytes(img.encodeJpg(decoded, quality: 82));
-      } else {
-        await File(foto.path).copy(targetPath);
-      }
-
-      if (mounted) setState(() => _fotoPaths.add(targetPath));
-    } finally {
-      if (mounted) setState(() => _sedangProsesFoto = false);
+    final hasilPath = await InputHelper.prosesFotoWatermark(
+      source: source,
+      afdeling: _selectedAfd,
+      blok: _selectedBlok,
+      ancak: _ancakCtrl.text.trim(),
+      pemanen: _pemanenCtrl.text.trim(),
+      mandor: _selectedMandor,
+      gps: _posisiGps,
+    );
+    if (mounted) {
+      setState(() {
+        if (hasilPath != null) _fotoPaths.add(hasilPath.toString());
+        _sedangProsesFoto = false;
+      });
     }
   }
 
@@ -158,7 +119,7 @@ class _FormInspeksiPageState extends State<FormInspeksiPage> {
     return skor < 0 ? 0.0 : skor;
   }
 
-  Future<void> _simpanInspeksi() async {
+  Future _simpanInspeksi() async {
     if (_pemanenCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Isi Nama Pemanen terlebih dahulu!')),
@@ -167,7 +128,7 @@ class _FormInspeksiPageState extends State<FormInspeksiPage> {
     }
 
     final namaPemanen = _pemanenCtrl.text.trim();
-    if (!_listPemanen.any((e) => e.toLowerCase() == namaPemanen.toLowerCase())) {
+    if (!_listPemanen.any((e) => e.toString().toLowerCase() == namaPemanen.toLowerCase())) {
       await DatabaseHelper.instance.addMaster('PEMANEN', namaPemanen);
       _muatMasterData();
     }
@@ -232,8 +193,10 @@ class _FormInspeksiPageState extends State<FormInspeksiPage> {
             onPressed: _ambilGps,
             icon: _sedangAmbilGps
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : Icon(_posisiGps != null ? Icons.gps_fixed : Icons.gps_off,
-                    color: _posisiGps != null ? const Color(0xFFFBC02D) : Colors.redAccent),
+                : Icon(
+                    _posisiGps != null ? Icons.gps_fixed : Icons.gps_off,
+                    color: _posisiGps != null ? const Color(0xFFFBC02D) : Colors.redAccent,
+                  ),
             tooltip: 'Kunci Koordinat GPS',
           ),
         ],
@@ -272,23 +235,23 @@ class _FormInspeksiPageState extends State<FormInspeksiPage> {
                     children: [
                       Expanded(
                         flex: 3,
-                        child: DropdownButtonFormField<String>(
+                        child: DropdownButtonFormField(
                           value: _selectedAfd,
                           isDense: true,
                           decoration: const InputDecoration(labelText: 'Afdeling', border: OutlineInputBorder()),
                           items: _listAfdeling.map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(fontSize: 13)))).toList(),
-                          onChanged: (v) => setState(() => _selectedAfd = v!),
+                          onChanged: (v) => setState(() => _selectedAfd = v.toString()),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         flex: 2,
-                        child: DropdownButtonFormField<String>(
+                        child: DropdownButtonFormField(
                           value: _selectedBlok,
                           isDense: true,
                           decoration: const InputDecoration(labelText: 'Blok', border: OutlineInputBorder()),
                           items: _listBlok.map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(fontSize: 13)))).toList(),
-                          onChanged: (v) => setState(() => _selectedBlok = v!),
+                          onChanged: (v) => setState(() => _selectedBlok = v.toString()),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -306,12 +269,13 @@ class _FormInspeksiPageState extends State<FormInspeksiPage> {
                     children: [
                       Expanded(
                         flex: 3,
-                        child: Autocomplete<String>(
+                        child: Autocomplete(
                           optionsBuilder: (TextEditingValue val) {
-                            if (val.text.isEmpty) return _listPemanen;
-                            return _listPemanen.where((e) => e.toLowerCase().contains(val.text.toLowerCase()));
+                            final semua = _listPemanen.map((e) => e.toString()).toList();
+                            if (val.text.isEmpty) return semua;
+                            return semua.where((e) => e.toLowerCase().contains(val.text.toLowerCase()));
                           },
-                          onSelected: (selection) => _pemanenCtrl.text = selection,
+                          onSelected: (selection) => _pemanenCtrl.text = selection.toString(),
                           fieldViewBuilder: (ctx, ctrl, focusNode, onSubmit) {
                             ctrl.text = _pemanenCtrl.text;
                             ctrl.addListener(() => _pemanenCtrl.text = ctrl.text);
@@ -338,12 +302,12 @@ class _FormInspeksiPageState extends State<FormInspeksiPage> {
                   Row(
                     children: [
                       Expanded(
-                        child: DropdownButtonFormField<String>(
+                        child: DropdownButtonFormField(
                           value: _selectedMandor,
                           isDense: true,
                           decoration: const InputDecoration(labelText: 'Mandor Panen', border: OutlineInputBorder()),
                           items: _listMandor.map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(fontSize: 13)))).toList(),
-                          onChanged: (v) => setState(() => _selectedMandor = v!),
+                          onChanged: (v) => setState(() => _selectedMandor = v.toString()),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -368,97 +332,60 @@ class _FormInspeksiPageState extends State<FormInspeksiPage> {
             ),
           ),
           const SizedBox(height: 10),
-          Card(
-            elevation: 2,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('2. TEMUAN 10 PARAMETER DENDA SOP', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
-                  const Divider(),
-                  ...daftarParameterSop.map((item) {
-                    final nilai = _jumlahTemuan[item.kode] ?? 0;
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('${item.kode}. ${item.nama}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                                Text('${fmtRp.format(item.dendaPerUnit)} / ${item.satuan} (${item.kategori})',
-                                    style: TextStyle(fontSize: 11, color: Colors.grey[700])),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: nilai > 0 ? () => setState(() => _jumlahTemuan[item.kode] = nilai - 1) : null,
-                            icon: const Icon(Icons.remove_circle, color: Colors.redAccent),
-                          ),
-                          SizedBox(
-                            width: 30,
-                            child: Text('$nilai', textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                          ),
-                          IconButton(
-                            onPressed: () => setState(() => _jumlahTemuan[item.kode] = nilai + 1),
-                            icon: const Icon(Icons.add_circle, color: Color(0xFF1B5E20)),
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
-                ],
-              ),
-            ),
+          KartuParameterSop(
+            jumlahTemuan: _jumlahTemuan,
+            onUbahNilai: (kode, nilaiBaru) {
+              setState(() => _jumlahTemuan[kode] = nilaiBaru);
+            },
           ),
           const SizedBox(height: 10),
-          Card(
-            elevation: 2,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('3. FOTO BUKTI LAPANGAN (AUTO-WATERMARK GPS)', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1B5E20))),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      ElevatedButton.icon(
-                        onPressed: _sedangProsesFoto ? null : () => _ambilFotoDenganWatermark(ImageSource.camera),
-                        icon: const Icon(Icons.camera_alt),
-                        label: Text(_sedangProsesFoto ? 'Memproses...' : 'Kamera + Cap GPS'),
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20), foregroundColor: Colors.white),
-                      ),
-                      const SizedBox(width: 10),
-                      OutlinedButton.icon(
-                        onPressed: _sedangProsesFoto ? null : () => _ambilFotoDenganWatermark(ImageSource.gallery),
-                        icon: const Icon(Icons.photo_library),
-                        label: const Text('Galeri'),
-                      ),
-                    ],
+          KartuFotoDanCatatan(
+            sedangProsesFoto: _sedangProsesFoto,
+            fotoPaths: _fotoPaths,
+            catatanCtrl: _catatanCtrl,
+            onAmbilFoto: _ambilFoto,
+            onHapusFoto: (index) {
+              setState(() => _fotoPaths.removeAt(index));
+            },
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1B5E20),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Total Denda: ${fmtRp.format(_totalDenda)}',
+                      style: const TextStyle(color: Color(0xFFFBC02D), fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                    Text(
+                      'Skor Mutu Panen: ${_nilaiMutu.toStringAsFixed(1)}%',
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                    ),
+                  ],
+                ),
+                ElevatedButton.icon(
+                  onPressed: _simpanInspeksi,
+                  icon: const Icon(Icons.save),
+                  label: const Text('SIMPAN DATA', style: TextStyle(fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFBC02D),
+                    foregroundColor: Colors.black,
                   ),
-                  if (_fotoPaths.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      height: 90,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: _fotoPaths.length,
-                        itemBuilder: (ctx, i) => Stack(
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.file(File(_fotoPaths[i]), width: 90, height: 90, fit: BoxFit.cover),
-                              ),
-                            ),
-                            Positioned(
-                              right: 8,
-                              top: 0,
-                              child: GestureDetector(
-                                onTap: () => setState(() => _fotoPaths.removeAt(i)),
-                                child: const CircleAvatar(radius: 11, backgroundColor: Colors.red, child: Icon(Icons.close, size: 14, color: Colors.white)),
-               
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+}
