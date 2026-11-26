@@ -22,20 +22,22 @@ class PetaBlokGpsPage extends StatefulWidget {
 
 class _PetaBlokGpsPageState extends State {
   final GlobalKey _mapCaptureKey = GlobalKey();
+  final TransformationController _zoomCtrl = TransformationController();
   String? _pdfPath;
   Position? _gpsSekarang;
+  StreamSubscription? _liveGpsSub;
   bool _sedangRekamJalur = false;
-  StreamSubscription? _gpsSub;
   String _namaSesi = '';
   int _jumlahTitikTerekam = 0;
   var _daftarPinDanTrek = [];
+  double _currentScale = 1.0;
 
   @override
   void initState() {
     super.initState();
     _muatPetaTersimpan();
     _muatPinDanTrek();
-    _cekGps();
+    _mulaiGpsRealTime();
   }
 
   Future _muatPetaTersimpan() async {
@@ -48,6 +50,53 @@ class _PetaBlokGpsPageState extends State {
   Future _muatPinDanTrek() async {
     final tracks = List.from(await DatabaseHelper.instance.getGpsTracks());
     if (mounted) setState(() => _daftarPinDanTrek = tracks);
+  }
+
+  void _mulaiGpsRealTime() async {
+    try {
+      LocationPermission perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      final awal = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      if (mounted) setState(() => _gpsSekarang = awal);
+
+      _liveGpsSub = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.bestForNavigation, distanceFilter: 3),
+      ).listen((Position pos) async {
+        if (mounted) {
+          setState(() => _gpsSekarang = pos);
+        }
+        if (_sedangRekamJalur) {
+          await DatabaseHelper.instance.insertGpsPoint(
+            _namaSesi,
+            pos.latitude,
+            pos.longitude,
+            tipePin: 'TREK',
+            keterangan: 'Jalur Inspeksi',
+          );
+          if (mounted) {
+            setState(() => _jumlahTitikTerekam++);
+            _muatPinDanTrek();
+          }
+        }
+      });
+    } catch (_) {}
+  }
+
+  void _ubahZoom(double faktor) {
+    final baru = (_currentScale * faktor).clamp(0.8, 6.0);
+    setState(() {
+      _currentScale = baru;
+      _zoomCtrl.value = Matrix4.identity()..scale(baru);
+    });
+  }
+
+  void _resetZoom() {
+    setState(() {
+      _currentScale = 1.0;
+      _zoomCtrl.value = Matrix4.identity();
+    });
   }
 
   Future _pilihDanSimpanPetaPdf() async {
@@ -66,8 +115,8 @@ class _PetaBlokGpsPageState extends State {
         setState(() => _pdfPath = tujuanPath);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            backgroundColor: Color(0xFF1B5E20),
-            content: Text('File Peta .PDF berhasil disimpan permanen di aplikasi!'),
+            backgroundColor: Color(0xFF0A6836),
+            content: Text('File Peta .PDF tersimpan permanen! Gunakan 2 jari atau tombol +/- untuk Zoom.'),
           ),
         );
       }
@@ -91,32 +140,17 @@ class _PetaBlokGpsPageState extends State {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            backgroundColor: Color(0xFF1B5E20),
-            content: Text('Screenshot Peta & Pin Temuan tersimpan otomatis untuk Lampiran Excel!'),
+            backgroundColor: Color(0xFF0A6836),
+            content: Text('Screenshot Peta & Lokasi Terkini tersimpan untuk Excel!'),
           ),
         );
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal ambil screenshot peta: $e')),
-        );
-      }
-    }
-  }
-
-  Future _cekGps() async {
-    try {
-      final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-      if (mounted) setState(() => _gpsSekarang = pos);
     } catch (_) {}
   }
 
   void _toggleRekamJalur() {
     if (_sedangRekamJalur) {
-      _gpsSub?.cancel();
       setState(() => _sedangRekamJalur = false);
-      _muatPinDanTrek();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Jalur trek disimpan ($_jumlahTitikTerekam titik).')),
       );
@@ -124,24 +158,6 @@ class _PetaBlokGpsPageState extends State {
       _namaSesi = 'Trek_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}';
       _jumlahTitikTerekam = 0;
       setState(() => _sedangRekamJalur = true);
-
-      _gpsSub = Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 8),
-      ).listen((Position pos) async {
-        await DatabaseHelper.instance.insertGpsPoint(
-          _namaSesi,
-          pos.latitude,
-          pos.longitude,
-          tipePin: 'TREK',
-          keterangan: 'Jalur Inspeksi',
-        );
-        if (mounted) {
-          setState(() {
-            _gpsSekarang = pos;
-            _jumlahTitikTerekam++;
-          });
-        }
-      });
     }
   }
 
@@ -183,12 +199,13 @@ class _PetaBlokGpsPageState extends State {
     if (tipe == 'MERAH') return Colors.red;
     if (tipe == 'ORANYE') return Colors.orange;
     if (tipe == 'KUNING') return Colors.amber.shade700;
-    return const Color(0xFF1B5E20);
+    return const Color(0xFF0A6836);
   }
 
   @override
   void dispose() {
-    _gpsSub?.cancel();
+    _liveGpsSub?.cancel();
+    _zoomCtrl.dispose();
     super.dispose();
   }
 
@@ -198,11 +215,11 @@ class _PetaBlokGpsPageState extends State {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Peta PDF, Trek & Pin Temuan', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+        title: const Text('Peta PDF Real-Time & Zoom', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
         actions: [
-          IconButton(onPressed: _captureScreenshotPeta, icon: const Icon(Icons.camera, color: Color(0xFFFBC02D)), tooltip: 'SS Peta untuk Excel'),
+          IconButton(onPressed: _captureScreenshotPeta, icon: const Icon(Icons.camera, color: Color(0xFFF7E300)), tooltip: 'SS Peta untuk Excel'),
           IconButton(onPressed: _eksporGpsTrackExcel, icon: const Icon(Icons.route), tooltip: 'Ekspor Trek Excel'),
-          IconButton(onPressed: _pilihDanSimpanPetaPdf, icon: const Icon(Icons.folder_open), tooltip: 'Simpan Peta PDF'),
+          IconButton(onPressed: _pilihDanSimpanPetaPdf, icon: const Icon(Icons.folder_open), tooltip: 'Upload Peta PDF'),
         ],
       ),
       body: RepaintBoundary(
@@ -211,17 +228,37 @@ class _PetaBlokGpsPageState extends State {
           children: [
             Container(
               width: double.infinity,
-              color: const Color(0xFF1B5E20).withOpacity(0.1),
+              color: const Color(0xFF0A6836).withOpacity(0.12),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(
-                    child: Text(
-                      _gpsSekarang != null
-                          ? 'GPS: ${_gpsSekarang!.latitude.toStringAsFixed(6)}, ${_gpsSekarang!.longitude.toStringAsFixed(6)}'
-                          : 'Mencari GPS...',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF1B5E20)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 9,
+                              height: 9,
+                              decoration: const BoxDecoration(color: Colors.blue, shape: BoxShape.circle),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              _gpsSekarang != null
+                                  ? 'Live: ${_gpsSekarang!.latitude.toStringAsFixed(6)}, ${_gpsSekarang!.longitude.toStringAsFixed(6)}'
+                                  : 'Mengunci GPS Real-Time...',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF0A6836)),
+                            ),
+                          ],
+                        ),
+                        if (_gpsSekarang != null)
+                          Text(
+                            'Akurasi GPS: ±${_gpsSekarang!.accuracy.toStringAsFixed(1)} meter',
+                            style: const TextStyle(fontSize: 10, color: Colors.black54),
+                          ),
+                      ],
                     ),
                   ),
                   ElevatedButton.icon(
@@ -229,7 +266,7 @@ class _PetaBlokGpsPageState extends State {
                     icon: Icon(_sedangRekamJalur ? Icons.stop : Icons.fiber_manual_record, size: 14),
                     label: Text(_sedangRekamJalur ? 'Stop ($_jumlahTitikTerekam)' : 'Rekam Trek', style: const TextStyle(fontSize: 11)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _sedangRekamJalur ? Colors.red : const Color(0xFF1B5E20),
+                      backgroundColor: _sedangRekamJalur ? Colors.red : const Color(0xFF0A6836),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     ),
@@ -238,14 +275,15 @@ class _PetaBlokGpsPageState extends State {
               ),
             ),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               color: Colors.white,
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  Row(children: [Icon(Icons.location_on, color: Colors.red, size: 16), Text(' Buah Tinggal', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))]),
-                  Row(children: [Icon(Icons.location_on, color: Colors.orange, size: 16), Text(' Brondolan', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))]),
-                  Row(children: [Icon(Icons.location_on, color: Colors.amber, size: 16), Text(' Pelepah', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))]),
+                  Row(children: [Icon(Icons.my_location, color: Colors.blue, size: 15), Text(' Posisi Anda', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold))]),
+                  Row(children: [Icon(Icons.location_on, color: Colors.red, size: 15), Text(' Buah Tinggal', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold))]),
+                  Row(children: [Icon(Icons.location_on, color: Colors.orange, size: 15), Text(' Brondolan', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold))]),
+                  Row(children: [Icon(Icons.location_on, color: Colors.amber, size: 15), Text(' Pelepah', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold))]),
                 ],
               ),
             ),
@@ -258,10 +296,10 @@ class _PetaBlokGpsPageState extends State {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.map, size: 56, color: Color(0xFF1B5E20)),
+                            const Icon(Icons.map, size: 56, color: Color(0xFF0A6836)),
                             const SizedBox(height: 8),
                             const Text(
-                              'Pilih file Peta Kerja Blok (.pdf) untuk disimpan permanen di dalam aplikasi.',
+                              'Upload file Peta Kerja Blok (.pdf) untuk melihat lokasi terkini real-time dengan fitur Zoom In / Out.',
                               textAlign: TextAlign.center,
                               style: TextStyle(fontSize: 13),
                             ),
@@ -269,17 +307,88 @@ class _PetaBlokGpsPageState extends State {
                             ElevatedButton.icon(
                               onPressed: _pilihDanSimpanPetaPdf,
                               icon: const Icon(Icons.picture_as_pdf),
-                              label: const Text('Muat & Simpan Peta .PDF'),
-                              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20), foregroundColor: Colors.white),
+                              label: const Text('Upload & Simpan Peta .PDF'),
+                              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0A6836), foregroundColor: Colors.white),
                             ),
                           ],
                         ),
                       ),
                     )
-                  : PdfViewer.file(_pdfPath!),
+                  : Stack(
+                      children: [
+                        InteractiveViewer(
+                          transformationController: _zoomCtrl,
+                          minScale: 0.8,
+                          maxScale: 6.0,
+                          onInteractionEnd: (_) {
+                            setState(() {
+                              _currentScale = _zoomCtrl.value.getMaxScaleOnAxis();
+                            });
+                          },
+                          child: PdfViewer.file(_pdfPath!),
+                        ),
+                        // Indikator Titik Lokasi Terkini Real-Time di atas Peta PDF
+                        if (_gpsSekarang != null)
+                          Positioned(
+                            top: 12,
+                            left: 12,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.75),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: Colors.blueAccent, width: 1.5),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.my_location, color: Colors.lightBlueAccent, size: 16),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'POSISI REAL-TIME\n${_gpsSekarang!.latitude.toStringAsFixed(6)}, ${_gpsSekarang!.longitude.toStringAsFixed(6)}',
+                                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        // Tombol Zoom In / Zoom Out / Reset di pojok kanan bawah peta
+                        Positioned(
+                          right: 12,
+                          bottom: 12,
+                          child: Column(
+                            children: [
+                              FloatingActionButton.small(
+                                heroTag: 'zoom_in',
+                                backgroundColor: const Color(0xFF0A6836),
+                                foregroundColor: Colors.white,
+                                onPressed: () => _ubahZoom(1.35),
+                                child: const Icon(Icons.zoom_in),
+                              ),
+                              const SizedBox(height: 6),
+                              FloatingActionButton.small(
+                                heroTag: 'zoom_out',
+                                backgroundColor: const Color(0xFF0A6836),
+                                foregroundColor: Colors.white,
+                                onPressed: () => _ubahZoom(0.75),
+                                child: const Icon(Icons.zoom_out),
+                              ),
+                              const SizedBox(height: 6),
+                              FloatingActionButton.small(
+                                heroTag: 'zoom_reset',
+                                backgroundColor: const Color(0xFFB38E0C),
+                                foregroundColor: Colors.white,
+                                onPressed: _resetZoom,
+                                child: const Icon(Icons.center_focus_strong),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
             ),
             Container(
-              height: 130,
+              height: 115,
               decoration: BoxDecoration(
                 color: Colors.grey.shade100,
                 border: Border(top: BorderSide(color: Colors.grey.shade300)),
