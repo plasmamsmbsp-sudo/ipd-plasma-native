@@ -20,12 +20,41 @@ jobs:
         with:
           flutter-version: '3.24.3'
           channel: 'stable'
-      - name: Pastikan Konfigurasi Android Universal (minSdk 21)
+
+      - name: Konfigurasi Android & Perbaikan Otomatis Plugin Gradle
         run: |
           flutter create . --platforms=android --project-name ipd_plasma
           sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21/g' android/app/build.gradle || true
           sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle || true
-          
+          sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/g' android/app/build.gradle || true
+          sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 35/g' android/app/build.gradle || true
+          cat << 'EOF' >> android/build.gradle
+
+          subprojects {
+              beforeEvaluate { project ->
+                  if (project.hasProperty('android')) {
+                      project.android {
+                          if (!project.ext.has('flutter')) {
+                              project.ext.flutter = [
+                                  compileSdkVersion: 35,
+                                  minSdkVersion: 21,
+                                  targetSdkVersion: 34,
+                                  ndkVersion: "26.1.10909125"
+                              ]
+                          }
+                      }
+                  }
+              }
+              afterEvaluate { project ->
+                  if (project.hasProperty('android')) {
+                      project.android {
+                          compileSdkVersion 35
+                      }
+                  }
+              }
+          }
+          EOF
+
       - name: Install Dependencies
         run: flutter pub get
 
