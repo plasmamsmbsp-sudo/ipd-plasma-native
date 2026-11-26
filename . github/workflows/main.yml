@@ -1,0 +1,63 @@
+name: Build IPD PLASMA Native APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Cek Kelengkapan File Proyek
+        run: |
+          if [ ! -f "pubspec.yaml" ] || [ ! -f "lib/main.dart" ]; then
+            echo "ERROR: File pubspec.yaml atau lib/main.dart belum dibuat di repositori!"
+            exit 1
+          fi
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.3'
+          channel: 'stable'
+          cache: true
+
+      - name: Generate & Configure Android Native Project
+        run: |
+          flutter create --org com.kencanaagri.ipdplasma --project-name ipd_plasma_native .
+          
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i 's/<application/<uses-permission android:name="android.permission.INTERNET"\/>\n    <uses-permission android:name="android.permission.CAMERA"\/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"\/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"\/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"\/>\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"\/>\n    <application/' $MANIFEST
+          sed -i 's/android:label="ipd_plasma_native"/android:label="IPD PLASMA"/' $MANIFEST
+
+          GRADLE="android/app/build.gradle"
+          if [ -f "$GRADLE" ]; then
+            sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/g' $GRADLE
+            sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 23/g' $GRADLE
+            sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 34/g' $GRADLE
+            sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 34/g' $GRADLE
+          fi
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Build Release APK
+        run: flutter build apk --release --split-per-abi=false
+
+      - name: Upload IPD PLASMA APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: IPD-PLASMA-Native-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
+          
