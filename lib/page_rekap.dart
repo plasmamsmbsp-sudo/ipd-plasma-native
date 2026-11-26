@@ -1,13 +1,10 @@
-import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
-import 'package:excel/excel.dart' as xl;
 import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'database_helper.dart';
+import 'excel_sap_helper.dart';
 
 class RiwayatDanEksporPage extends StatefulWidget {
   const RiwayatDanEksporPage({super.key});
@@ -40,9 +37,7 @@ class _RiwayatDanEksporPageState extends State {
     if (url.trim().isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Isi URL Google Apps Script terlebih dahulu di tab "Master & Sheet"!'),
-          ),
+          const SnackBar(content: Text('Isi URL Google Apps Script di tab "Master & WA"!')),
         );
       }
       return;
@@ -52,9 +47,7 @@ class _RiwayatDanEksporPageState extends State {
     if (belumSync.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Semua data sudah tersinkron ke Google Sheets.'),
-          ),
+          const SnackBar(content: Text('Semua data sudah tersinkron ke Google Sheets.')),
         );
       }
       return;
@@ -65,27 +58,10 @@ class _RiwayatDanEksporPageState extends State {
 
     try {
       for (var row in belumSync) {
-        final payload = {
-          'tanggal': row['tanggal'],
-          'pt': row['pt'],
-          'afdeling': row['afdeling'],
-          'blok': row['blok'],
-          'no_ancak': row['no_ancak'],
-          'pokok_sampel': row['pokok_sampel'],
-          'pemanen': row['pemanen'],
-          'mandor': row['mandor'],
-          'asisten': row['asisten'],
-          'total_denda': row['total_denda'],
-          'nilai_mutu': row['nilai_mutu'],
-          'gps': (row['lat'] != null) ? '${row['lat']}, ${row['lng']}' : '-',
-          'temuan_json': row['temuan_json'],
-          'catatan': row['catatan'] ?? '',
-        };
-
         final resp = await http.post(
           Uri.parse(url.trim()),
           headers: {'Content-Type': 'application/json'},
-          body: jsonEncode(payload),
+          body: jsonEncode(row),
         );
 
         if (resp.statusCode == 200 || resp.statusCode == 302) {
@@ -105,116 +81,11 @@ class _RiwayatDanEksporPageState extends State {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: Colors.red,
-            content: Text('Gagal koneksi internet / URL Sheet salah: $e'),
-          ),
+          SnackBar(backgroundColor: Colors.red, content: Text('Gagal sync: $e')),
         );
       }
     } finally {
       if (mounted) setState(() => _sedangSync = false);
-    }
-  }
-
-  Future _eksporExcelDanBagikan() async {
-    if (_dataInspeksi.isEmpty) return;
-
-    var excel = xl.Excel.createExcel();
-    xl.Sheet sheetRekap = excel['REKAP_IPD'];
-    excel.delete('Sheet1');
-
-    sheetRekap.appendRow([
-      xl.TextCellValue('No'),
-      xl.TextCellValue('Tanggal'),
-      xl.TextCellValue('Afdeling'),
-      xl.TextCellValue('Blok'),
-      xl.TextCellValue('Ancak'),
-      xl.TextCellValue('Pemanen'),
-      xl.TextCellValue('Mandor'),
-      xl.TextCellValue('Asisten'),
-      xl.TextCellValue('Total Denda (Rp)'),
-      xl.TextCellValue('Skor Mutu (%)'),
-      xl.TextCellValue('Koordinat GPS'),
-      xl.TextCellValue('Catatan'),
-    ]);
-
-    xl.Sheet sheetDetail = excel['DETAIL_TEMUAN_SOP'];
-    sheetDetail.appendRow([
-      xl.TextCellValue('Tanggal'),
-      xl.TextCellValue('Afdeling'),
-      xl.TextCellValue('Blok'),
-      xl.TextCellValue('Pemanen'),
-      ...daftarParameterSop.map((e) => xl.TextCellValue('${e.kode} - ${e.nama} (${e.satuan})')),
-    ]);
-
-    xl.Sheet sheetRingkasanMandor = excel['REKAP_PER_MANDOR'];
-    sheetRingkasanMandor.appendRow([
-      xl.TextCellValue('Mandor'),
-      xl.TextCellValue('Jumlah Sampel Ancak'),
-      xl.TextCellValue('Total Denda (Rp)'),
-      xl.TextCellValue('Rata-rata Mutu (%)'),
-    ]);
-
-    var perMandor = {};
-
-    for (int i = 0; i < _dataInspeksi.length; i++) {
-      final row = _dataInspeksi[i];
-      final temuan = Map.from(jsonDecode(row['temuan_json'].toString()));
-      final gps = (row['lat'] != null) ? '${row['lat']}, ${row['lng']}' : '-';
-
-      final namaMandor = row['mandor'].toString();
-      if (!perMandor.containsKey(namaMandor)) {
-        perMandor[namaMandor] = [];
-      }
-      (perMandor[namaMandor] as List).add(row);
-
-      sheetRekap.appendRow([
-        xl.IntCellValue(i + 1),
-        xl.TextCellValue(row['tanggal'].toString()),
-        xl.TextCellValue(row['afdeling'].toString()),
-        xl.TextCellValue(row['blok'].toString()),
-        xl.TextCellValue(row['no_ancak'].toString()),
-        xl.TextCellValue(row['pemanen'].toString()),
-        xl.TextCellValue(row['mandor'].toString()),
-        xl.TextCellValue(row['asisten'].toString()),
-        xl.IntCellValue((row['total_denda'] ?? 0) as int),
-        xl.DoubleCellValue((row['nilai_mutu'] as num).toDouble()),
-        xl.TextCellValue(gps),
-        xl.TextCellValue((row['catatan'] ?? '').toString()),
-      ]);
-
-      sheetDetail.appendRow([
-        xl.TextCellValue(row['tanggal'].toString()),
-        xl.TextCellValue(row['afdeling'].toString()),
-        xl.TextCellValue(row['blok'].toString()),
-        xl.TextCellValue(row['pemanen'].toString()),
-        ...daftarParameterSop.map((e) => xl.IntCellValue((temuan[e.kode] ?? 0) as int)),
-      ]);
-    }
-
-    perMandor.forEach((mandor, rawList) {
-      final list = rawList as List;
-      int sumDenda = list.fold(0, (s, e) => s + ((e['total_denda'] ?? 0) as int));
-      double avgMutu = list.fold(0.0, (s, e) => s + (e['nilai_mutu'] as num).toDouble()) / list.length;
-      sheetRingkasanMandor.appendRow([
-        xl.TextCellValue(mandor.toString()),
-        xl.IntCellValue(list.length),
-        xl.IntCellValue(sumDenda),
-        xl.DoubleCellValue(double.parse(avgMutu.toStringAsFixed(1))),
-      ]);
-    });
-
-    final dir = await getTemporaryDirectory();
-    final tglFile = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
-    final filePath = p.join(dir.path, 'LAPORAN_IPD_PLASMA_$tglFile.xlsx');
-    final fileBytes = excel.save();
-
-    if (fileBytes != null) {
-      await File(filePath).writeAsBytes(fileBytes);
-      await Share.shareXFiles(
-        [XFile(filePath)],
-        text: 'Laporan IPD PLASMA - PT Kencana Agri Plasma Wanggarasi',
-      );
     }
   }
 
@@ -225,29 +96,38 @@ class _RiwayatDanEksporPageState extends State {
     final dataHariIni = _dataInspeksi.where((e) => e['tanggal'] == hariIni).toList();
     final sumber = dataHariIni.isNotEmpty ? dataHariIni : _dataInspeksi;
 
-    int grandTotalDenda = sumber.fold(0, (sum, item) => sum + ((item['total_denda'] ?? 0) as int));
-    double rataMutu = sumber.fold(0.0, (sum, item) => sum + (item['nilai_mutu'] as num).toDouble()) / sumber.length;
+    int totalDenda = sumber.fold(0, (s, item) => s + ((item['total_denda'] ?? 0) as int));
+    double totalLossesKg = sumber.fold(0.0, (s, item) => s + ((item['total_losses_kg'] ?? 0.0) as num).toDouble());
+    double avgLossesPct = sumber.fold(0.0, (s, item) => s + ((item['persen_losses'] ?? 0.0) as num).toDouble()) / sumber.length;
+    double avgMutu = sumber.fold(0.0, (s, item) => s + ((item['nilai_mutu'] ?? 0.0) as num).toDouble()) / sumber.length;
 
+    final first = sumber.first;
     StringBuffer sb = StringBuffer();
-    sb.writeln('*LAPORAN INSPEKSI PANEN (IPD PLASMA)*');
-    sb.writeln('*PT KENCANA AGRI - PLASMA WANGGARASI*');
-    sb.writeln('Tanggal: ${DateFormat('dd MMM yyyy').format(DateTime.now())}');
-    sb.writeln('Total Sampel: ${sumber.length} Ancak | Rata-rata Mutu: *${rataMutu.toStringAsFixed(1)}%*');
-    sb.writeln('Total Denda SOP: *${fmtRp.format(grandTotalDenda)}*');
-    sb.writeln('-----------------------------------');
+    sb.writeln('*LAPORAN IPD PLASMA - KENCANA AGRI*');
+    sb.writeln('${first['afdeling']} | ${DateFormat('dd/MM/yyyy').format(DateTime.now())}');
+    sb.writeln('Asisten: ${first['asisten']} | Mandor: ${first['mandor']}');
+    sb.writeln('----------------------------------');
+    sb.writeln('Sampel: *${sumber.length} Ancak* | Mutu: *${avgMutu.toStringAsFixed(1)}%*');
+    sb.writeln('Losses: *${totalLossesKg.toStringAsFixed(2)} kg (${avgLossesPct.toStringAsFixed(2)}%)*');
+    sb.writeln('Total Denda: *${fmtRp.format(totalDenda)}*');
+    sb.writeln('----------------------------------');
 
-    for (var r in sumber) {
-      sb.writeln('• *${r['afdeling']} Blok ${r['blok']}* (Ancak ${r['no_ancak']}) - *${r['pemanen']}*');
-      sb.writeln('  Mandor: ${r['mandor']} | Mutu: ${r['nilai_mutu']}% | Denda: ${fmtRp.format(r['total_denda'])}');
+    for (int i = 0; i < sumber.length; i++) {
+      final r = sumber[i];
       final temuan = Map.from(jsonDecode(r['temuan_json'].toString()));
-      var rincian = [];
+      var detailItem = [];
       for (var sop in daftarParameterSop) {
         int qty = (temuan[sop.kode] ?? 0) as int;
-        if (qty > 0) rincian.add('${sop.nama}: $qty ${sop.satuan}');
+        if (qty > 0) detailItem.add('${sop.singkatan}:$qty');
       }
-      if (rincian.isNotEmpty) sb.writeln('  Temuan: ${rincian.join(', ')}');
+      final rincianStr = detailItem.isEmpty ? 'Nihil' : detailItem.join(', ');
+      sb.writeln('${i + 1}. *${r['pemanen']}* (${r['blok']}/A.${r['no_ancak']})');
+      sb.writeln('   Losses: ${r['total_losses_kg']}kg (${r['persen_losses']}%) | Denda: ${fmtRp.format(r['total_denda'])}');
+      sb.writeln('   Temuan: $rincianStr');
     }
 
+    sb.writeln('----------------------------------');
+    sb.writeln('_Powered By Tim Plasma Area 4_');
     Share.share(sb.toString());
   }
 
@@ -258,18 +138,13 @@ class _RiwayatDanEksporPageState extends State {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Rekap, Excel & Sync Sheet', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        title: const Text('Rekap SAP, Excel & WA', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
             onPressed: _sedangSync ? null : _sinkronKeGoogleSheets,
             icon: _sedangSync
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                  )
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                 : const Icon(Icons.cloud_upload, color: Color(0xFFFBC02D)),
-            tooltip: 'Sync ke Google Sheets',
           ),
         ],
       ),
@@ -285,10 +160,7 @@ class _RiwayatDanEksporPageState extends State {
                     onPressed: _sedangSync ? null : _sinkronKeGoogleSheets,
                     icon: const Icon(Icons.cloud_sync),
                     label: Text('Sync ke Google Sheets ($belumSyncCount belum terkirim)'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.teal.shade800,
-                      foregroundColor: Colors.white,
-                    ),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.teal.shade800, foregroundColor: Colors.white),
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -296,13 +168,10 @@ class _RiwayatDanEksporPageState extends State {
                   children: [
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed: _eksporExcelDanBagikan,
+                        onPressed: () => ExcelSapHelper.eksporExcelFormatResmi(_dataInspeksi),
                         icon: const Icon(Icons.table_view),
-                        label: const Text('Excel 3 Sheet'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF1B5E20),
-                          foregroundColor: Colors.white,
-                        ),
+                        label: const Text('Excel Denda SAP'),
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20), foregroundColor: Colors.white),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -310,11 +179,8 @@ class _RiwayatDanEksporPageState extends State {
                       child: ElevatedButton.icon(
                         onPressed: _bagikanKeWhatsApp,
                         icon: const Icon(Icons.send),
-                        label: const Text('Kirim WhatsApp'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFBC02D),
-                          foregroundColor: Colors.black,
-                        ),
+                        label: const Text('Kirim WA Detail'),
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFBC02D), foregroundColor: Colors.black),
                       ),
                     ),
                   ],
@@ -335,28 +201,16 @@ class _RiwayatDanEksporPageState extends State {
                         child: ListTile(
                           leading: CircleAvatar(
                             backgroundColor: const Color(0xFF1B5E20),
-                            child: Text(
-                              r['blok'].toString(),
-                              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                            ),
+                            child: Text(r['blok'].toString(), style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                           ),
                           title: Row(
                             children: [
-                              Expanded(
-                                child: Text(
-                                  '${r['pemanen']} (Ancak ${r['no_ancak']})',
-                                  style: const TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                              Icon(
-                                isSynced ? Icons.cloud_done : Icons.cloud_off,
-                                size: 16,
-                                color: isSynced ? Colors.green : Colors.orange,
-                              ),
+                              Expanded(child: Text('${r['pemanen']} (A.${r['no_ancak']})', style: const TextStyle(fontWeight: FontWeight.bold))),
+                              Icon(isSynced ? Icons.cloud_done : Icons.cloud_off, size: 16, color: isSynced ? Colors.green : Colors.orange),
                             ],
                           ),
                           subtitle: Text(
-                            '${r['tanggal']} • ${r['afdeling']} • Mandor: ${r['mandor']}\nMutu: ${r['nilai_mutu']}% | Denda: ${fmtRp.format(r['total_denda'])}',
+                            'Losses: ${r['total_losses_kg']} kg (${r['persen_losses']}%) | Denda: ${fmtRp.format(r['total_denda'])}\n${r['tanggal']} • Mandor: ${r['mandor']}',
                           ),
                           isThreeLine: true,
                           trailing: IconButton(
