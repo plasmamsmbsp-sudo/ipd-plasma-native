@@ -21,12 +21,12 @@ class IpdPlasmaApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF1B5E20),
-          primary: const Color(0xFF1B5E20),
-          secondary: const Color(0xFFFBC02D),
+          seedColor: const Color(0xFF0A6836),
+          primary: const Color(0xFF0A6836),
+          secondary: const Color(0xFFB38E0C),
         ),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF1B5E20),
+          backgroundColor: Color(0xFF0A6836),
           foregroundColor: Colors.white,
           elevation: 2,
         ),
@@ -59,27 +59,27 @@ class _MainNavigationScreenState extends State {
       body: pages[_selectedIndex],
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
-        indicatorColor: const Color(0xFFFBC02D).withOpacity(0.35),
+        indicatorColor: const Color(0xFFF7E300).withOpacity(0.45),
         onDestinationSelected: (idx) => setState(() => _selectedIndex = idx),
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.fact_check_outlined),
-            selectedIcon: Icon(Icons.fact_check, color: Color(0xFF1B5E20)),
+            selectedIcon: Icon(Icons.fact_check, color: Color(0xFF0A6836)),
             label: 'Input IPD',
           ),
           NavigationDestination(
             icon: Icon(Icons.table_chart_outlined),
-            selectedIcon: Icon(Icons.table_chart, color: Color(0xFF1B5E20)),
+            selectedIcon: Icon(Icons.table_chart, color: Color(0xFF0A6836)),
             label: 'Rekap & SAP',
           ),
           NavigationDestination(
             icon: Icon(Icons.map_outlined),
-            selectedIcon: Icon(Icons.map, color: Color(0xFF1B5E20)),
+            selectedIcon: Icon(Icons.map, color: Color(0xFF0A6836)),
             label: 'Peta & Trek',
           ),
           NavigationDestination(
             icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings, color: Color(0xFF1B5E20)),
+            selectedIcon: Icon(Icons.settings, color: Color(0xFF0A6836)),
             label: 'Master & WA',
           ),
         ],
