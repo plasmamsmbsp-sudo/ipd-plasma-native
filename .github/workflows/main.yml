@@ -20,13 +20,12 @@ jobs:
         with:
           flutter-version: '3.24.3'
           channel: 'stable'
-
       - name: Pastikan Konfigurasi Android Universal (minSdk 21)
         run: |
-          flutter create . --platforms=android
+          flutter create . --platforms=android --project-name ipd_plasma
           sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21/g' android/app/build.gradle || true
           sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle || true
-
+          
       - name: Install Dependencies
         run: flutter pub get
 
