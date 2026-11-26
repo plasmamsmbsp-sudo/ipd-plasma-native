@@ -73,7 +73,7 @@ class _RiwayatDanEksporPageState extends State {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            backgroundColor: const Color(0xFF1B5E20),
+            backgroundColor: const Color(0xFF0A6836),
             content: Text('Berhasil sinkron $berhasil data ke Google Sheets!'),
           ),
         );
@@ -103,30 +103,42 @@ class _RiwayatDanEksporPageState extends State {
 
     final first = sumber.first;
     StringBuffer sb = StringBuffer();
-    sb.writeln('*LAPORAN IPD PLASMA - KENCANA AGRI*');
-    sb.writeln('${first['afdeling']} | ${DateFormat('dd/MM/yyyy').format(DateTime.now())}');
-    sb.writeln('Asisten: ${first['asisten']} | Mandor: ${first['mandor']}');
-    sb.writeln('----------------------------------');
-    sb.writeln('Sampel: *${sumber.length} Ancak* | Mutu: *${avgMutu.toStringAsFixed(1)}%*');
-    sb.writeln('Losses: *${totalLossesKg.toStringAsFixed(2)} kg (${avgLossesPct.toStringAsFixed(2)}%)*');
-    sb.writeln('Total Denda: *${fmtRp.format(totalDenda)}*');
-    sb.writeln('----------------------------------');
+    sb.writeln('*LAPORAN INSPEKSI PANEN*');
+    sb.writeln('*PT KENCANA AGRI*');
+    sb.writeln('Afdeling : ${first['afdeling']}');
+    sb.writeln('Tanggal : ${DateFormat('dd/MM/yyyy').format(DateTime.now())}');
+    sb.writeln('Asisten : ${first['asisten']}');
+    sb.writeln('Mandor : ${first['mandor']}');
+    sb.writeln('Sampel : ${sumber.length} Ancak');
+    sb.writeln('Mutu : ${avgMutu.toStringAsFixed(1)}%');
+    sb.writeln('Losses : ${totalLossesKg.toStringAsFixed(2)} kg (${avgLossesPct.toStringAsFixed(2)}%)');
+    sb.writeln('Denda : ${fmtRp.format(totalDenda)}');
+    sb.writeln('----------------------');
 
     for (int i = 0; i < sumber.length; i++) {
       final r = sumber[i];
       final temuan = Map.from(jsonDecode(r['temuan_json'].toString()));
-      var detailItem = [];
+      sb.writeln('${i + 1}. *${r['pemanen']}*');
+      sb.writeln('Blok : ${r['blok']}');
+      sb.writeln('Ancak : ${r['no_ancak']}');
+      sb.writeln('Losses : ${r['total_losses_kg']} kg (${r['persen_losses']}%)');
+      sb.writeln('Denda : ${fmtRp.format(r['total_denda'])}');
+      sb.writeln('Temuan :');
+
+      bool adaTemuan = false;
       for (var sop in daftarParameterSop) {
         int qty = (temuan[sop.kode] ?? 0) as int;
-        if (qty > 0) detailItem.add('${sop.singkatan}:$qty');
+        if (qty > 0) {
+          adaTemuan = true;
+          sb.writeln('- ${sop.nama} : $qty ${sop.satuan}');
+        }
       }
-      final rincianStr = detailItem.isEmpty ? 'Nihil' : detailItem.join(', ');
-      sb.writeln('${i + 1}. *${r['pemanen']}* (${r['blok']}/A.${r['no_ancak']})');
-      sb.writeln('   Losses: ${r['total_losses_kg']}kg (${r['persen_losses']}%) | Denda: ${fmtRp.format(r['total_denda'])}');
-      sb.writeln('   Temuan: $rincianStr');
+      if (!adaTemuan) {
+        sb.writeln('- Nihil');
+      }
+      sb.writeln('----------------------');
     }
 
-    sb.writeln('----------------------------------');
     sb.writeln('_Powered By Tim Plasma Area 4_');
     Share.share(sb.toString());
   }
@@ -144,7 +156,7 @@ class _RiwayatDanEksporPageState extends State {
             onPressed: _sedangSync ? null : _sinkronKeGoogleSheets,
             icon: _sedangSync
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : const Icon(Icons.cloud_upload, color: Color(0xFFFBC02D)),
+                : const Icon(Icons.cloud_upload, color: Color(0xFFF7E300)),
           ),
         ],
       ),
@@ -160,7 +172,7 @@ class _RiwayatDanEksporPageState extends State {
                     onPressed: _sedangSync ? null : _sinkronKeGoogleSheets,
                     icon: const Icon(Icons.cloud_sync),
                     label: Text('Sync ke Google Sheets ($belumSyncCount belum terkirim)'),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.teal.shade800, foregroundColor: Colors.white),
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0A6836), foregroundColor: Colors.white),
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -171,7 +183,7 @@ class _RiwayatDanEksporPageState extends State {
                         onPressed: () => ExcelSapHelper.eksporExcelFormatResmi(_dataInspeksi),
                         icon: const Icon(Icons.table_view),
                         label: const Text('Excel Denda SAP'),
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B5E20), foregroundColor: Colors.white),
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0A6836), foregroundColor: Colors.white),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -179,8 +191,8 @@ class _RiwayatDanEksporPageState extends State {
                       child: ElevatedButton.icon(
                         onPressed: _bagikanKeWhatsApp,
                         icon: const Icon(Icons.send),
-                        label: const Text('Kirim WA Detail'),
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFBC02D), foregroundColor: Colors.black),
+                        label: const Text('Kirim WA Vertikal'),
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFB38E0C), foregroundColor: Colors.white),
                       ),
                     ),
                   ],
@@ -200,7 +212,7 @@ class _RiwayatDanEksporPageState extends State {
                         margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                         child: ListTile(
                           leading: CircleAvatar(
-                            backgroundColor: const Color(0xFF1B5E20),
+                            backgroundColor: const Color(0xFF0A6836),
                             child: Text(r['blok'].toString(), style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                           ),
                           title: Row(
