@@ -153,10 +153,10 @@ class MasterDatabase {
   String afdeling;
   String asisten;
   String gasWebhookUrl;
-  List<String> daftarMandor;
+    List<String> daftarMandor;
   List> daftarPemanen; // [{'nama': '...', 'nik': '...'}]
-  List> daftarBlok; // [{'blok': 'A01', 'bjr': 16.5}]
-
+  List> daftarBlok;    // [{'blok': 'A01', 'bjr': 10.5}]
+  
   MasterDatabase({
     this.pt = 'PT Kencana Agri (PT. STN)',
     this.kebun = 'Kebun Plasma Wanggarasi',
