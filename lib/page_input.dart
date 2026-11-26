@@ -25,7 +25,7 @@ class _FormInspeksiPageState extends State<FormInspeksiPage> {
   final _catatanCtrl = TextEditingController();
 
   List<String> _listAfdeling = ['AFD BSP', 'AFD MSM', 'PT. STN'];
-  List<String> _listBlok = ['A01', 'A02', 'B01', 'B02', 'C01'];
+  List<String> _listBlok = ['A01', 'A02', 'B01', 'B02', 'C01', 'F15'];
   List<String> _listMandor = ['Mas Budi', 'Pak Candra', 'Pak Ramin', 'Bang Edi', 'Aldrianto Eka Putra'];
   List<String> _listPemanen = [];
 
@@ -461,4 +461,4 @@ class _FormInspeksiPageState extends State<FormInspeksiPage> {
                               child: GestureDetector(
                                 onTap: () => setState(() => _fotoPaths.removeAt(i)),
                                 child: const CircleAvatar(radius: 11, backgroundColor: Colors.red, child: Icon(Icons.close, size: 14, color: Colors.white)),
-                      
+               
