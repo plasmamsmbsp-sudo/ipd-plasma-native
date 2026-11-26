@@ -50,6 +50,14 @@ jobs:
             sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 24/g' android/app/build.gradle
           fi
 
+          # Naikkan versi Kotlin Gradle Plugin ke 2.1.0 agar kompatibel dengan flutter_tts
+          if [ -f "android/settings.gradle.kts" ]; then
+            sed -i -E 's/id\("org\.jetbrains\.kotlin\.android"\)[[:space:]]+version[[:space:]]+"[^"]+"/id("org.jetbrains.kotlin.android") version "2.1.0"/g' android/settings.gradle.kts
+          fi
+          if [ -f "android/settings.gradle" ]; then
+            sed -i -E 's/id "org\.jetbrains\.kotlin\.android" version "[^"]+"/id "org.jetbrains.kotlin.android" version "2.1.0"/g' android/settings.gradle
+          fi
+
           python3 -c '
           import os
           from PIL import Image, ImageDraw
