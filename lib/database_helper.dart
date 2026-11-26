@@ -106,6 +106,7 @@ class DatabaseHelper {
       {'tipe': 'BLOK', 'nama': 'B01'},
       {'tipe': 'BLOK', 'nama': 'B02'},
       {'tipe': 'BLOK', 'nama': 'C01'},
+      {'tipe': 'BLOK', 'nama': 'F15'},
       {'tipe': 'MANDOR', 'nama': 'Mas Budi'},
       {'tipe': 'MANDOR', 'nama': 'Pak Candra'},
       {'tipe': 'MANDOR', 'nama': 'Pak Ramin'},
