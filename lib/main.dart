@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import 'page_input.dart';
-import 'package:flutter/material.dart';
+import 'splash_logo.dart';
 import 'page_input.dart';
 import 'page_rekap.dart';
-import 'page_peta_master.dart';
-
+import 'page_peta.dart';
+import 'page_master.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,7 +31,7 @@ class IpdPlasmaApp extends StatelessWidget {
           elevation: 2,
         ),
       ),
-      home: const MainNavigationScreen(),
+      home: const SplashScreenKencana(nextPage: MainNavigationScreen()),
     );
   }
 }
@@ -41,10 +40,10 @@ class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
 
   @override
-  State<MainNavigationScreen> createState() => _MainNavigationScreenState();
+  State createState() => _MainNavigationScreenState();
 }
 
-class _MainNavigationScreenState extends State<MainNavigationScreen> {
+class _MainNavigationScreenState extends State {
   int _selectedIndex = 0;
 
   @override
@@ -71,21 +70,20 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           NavigationDestination(
             icon: Icon(Icons.table_chart_outlined),
             selectedIcon: Icon(Icons.table_chart, color: Color(0xFF1B5E20)),
-            label: 'Rekap & Sync',
+            label: 'Rekap & SAP',
           ),
           NavigationDestination(
             icon: Icon(Icons.map_outlined),
             selectedIcon: Icon(Icons.map, color: Color(0xFF1B5E20)),
-            label: 'Peta & Track',
+            label: 'Peta & Trek',
           ),
           NavigationDestination(
             icon: Icon(Icons.settings_outlined),
             selectedIcon: Icon(Icons.settings, color: Color(0xFF1B5E20)),
-            label: 'Master & Sheet',
+            label: 'Master & WA',
           ),
         ],
       ),
     );
   }
 }
-
