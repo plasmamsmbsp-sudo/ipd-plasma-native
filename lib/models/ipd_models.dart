@@ -14,24 +14,25 @@ class InspeksiItem {
   final String pemanen;
   final String nikPemanen;
   final int jumlahPokokSampel;
-  final int jumlahTandanPanen;
+  final int janjangPanen;
 
   // 10 Parameter Mutu & Losses Panen
-  final int brondolanTidakDikutip; // butir / piringan & gawangan
-  final int buahMentah;            // tandan
-  final int buahMengkal;           // tandan
-  final int tandanKosong;          // tandan
-  final int buahTinggal;           // tandan tidak diangkut ke TPH
-  final int tangkaiPanjang;        // tandan (> 2 cm)
-  final int pelepahSengkleh;       // pelepah tidak dipotong / sengkleh
-  final int pelepahTidakDisusun;   // pokok (tidak disusun di gawangan mati)
-  final int tidakBeriNomor;        // tandan tanpa nomor pemanen
-  final int tphTidakBersih;        // titik TPH kotor / berondolan tertinggal
+  final int brondolanTidakDikutip;
+  final int buahMentah;
+  final int buahMengkal;
+  final int tandanKosong;
+  final int buahTinggal;
+  final int tangkaiPanjang;
+  final int pelepahSengkleh;
+  final int pelepahTidakDisusun;
+  final int tidakBeriNomor;
+  final int tphTidakBersih;
 
-  // GPS & Dokumentasi Foto
+  // GPS, Foto & Screenshot Peta
   final double? lat;
   final double? lng;
   final List<String> fotoPaths;
+  final String? mapScreenshotPath;
   final String catatan;
 
   InspeksiItem({
@@ -47,8 +48,9 @@ class InspeksiItem {
     required this.mandor,
     required this.pemanen,
     this.nikPemanen = '-',
-    required this.jumlahPokokSampel,
-    required this.jumlahTandanPanen,
+    this.jumlahPokokSampel = 0,
+    int? janjangPanen,
+    int? jumlahTandanPanen,
     this.brondolanTidakDikutip = 0,
     this.buahMentah = 0,
     this.buahMengkal = 0,
@@ -62,28 +64,32 @@ class InspeksiItem {
     this.lat,
     this.lng,
     this.fotoPaths = const [],
+    this.mapScreenshotPath,
     this.catatan = '',
-  });
+  }) : janjangPanen = janjangPanen ?? jumlahTandanPanen ?? 0;
 
-  // Berat brondolan tertinggal (estimasi 1 butir = 12 gram = 0.012 kg)
+  // Alias agar tetap kompatibel jika file lain memanggil jumlahTandanPanen
+  int get jumlahTandanPanen => janjangPanen;
+
+  // Berat brondolan tertinggal (1 butir = 12 gram = 0.012 kg)
   double get beratBrondolanKg => brondolanTidakDikutip * 0.012;
 
-  // Berat buah tinggal (tandan x BJR)
+  // Berat buah tinggal (janjang x BJR)
   double get beratBuahTinggalKg => buahTinggal * bjr;
 
   // Total berat produksi sampel (kg)
   double get totalBeratProduksiKg {
-    final base = jumlahTandanPanen * bjr;
+    final base = janjangPanen * bjr;
     return base > 0 ? base : bjr;
   }
 
-  // Persentase Losses (%) otomatis dari BJR, brondolan, dan buah tinggal
+  // Persentase Losses (%) otomatis
   double get persentaseLosses {
     final totalLossKg = beratBrondolanKg + beratBuahTinggalKg;
     return (totalLossKg / totalBeratProduksiKg) * 100.0;
   }
 
-  // Kategori Warna Pin Peta (MERAH / ORANYE / KUNING)
+  // Kategori Warna Pin Peta
   String get tingkatRisiko {
     if (persentaseLosses >= 3.0 || totalDenda >= 100000) return 'MERAH';
     if (persentaseLosses >= 1.5 || totalDenda >= 50000) return 'ORANYE';
@@ -93,16 +99,16 @@ class InspeksiItem {
   // Kalkulasi Total Denda SOP Panen (Rp)
   int get totalDenda {
     int denda = 0;
-    denda += brondolanTidakDikutip * 500;   // Rp 500 / butir
-    denda += buahMentah * 25000;           // Rp 25.000 / tandan
-    denda += buahMengkal * 15000;          // Rp 15.000 / tandan
-    denda += tandanKosong * 10000;         // Rp 10.000 / tandan
-    denda += buahTinggal * 20000;          // Rp 20.000 / tandan
-    denda += tangkaiPanjang * 5000;        // Rp 5.000 / tandan
-    denda += pelepahSengkleh * 5000;       // Rp 5.000 / pelepah
-    denda += pelepahTidakDisusun * 5000;   // Rp 5.000 / pokok
-    denda += tidakBeriNomor * 2000;        // Rp 2.000 / tandan
-    denda += tphTidakBersih * 10000;       // Rp 10.000 / TPH
+    denda += brondolanTidakDikutip * 500;
+    denda += buahMentah * 25000;
+    denda += buahMengkal * 15000;
+    denda += tandanKosong * 10000;
+    denda += buahTinggal * 20000;
+    denda += tangkaiPanjang * 5000;
+    denda += pelepahSengkleh * 5000;
+    denda += pelepahTidakDisusun * 5000;
+    denda += tidakBeriNomor * 2000;
+    denda += tphTidakBersih * 10000;
     return denda;
   }
 
@@ -120,7 +126,7 @@ class InspeksiItem {
         'pemanen': pemanen,
         'nikPemanen': nikPemanen,
         'jumlahPokokSampel': jumlahPokokSampel,
-        'jumlahTandanPanen': jumlahTandanPanen,
+        'janjangPanen': janjangPanen,
         'brondolanTidakDikutip': brondolanTidakDikutip,
         'buahMentah': buahMentah,
         'buahMengkal': buahMengkal,
@@ -134,6 +140,7 @@ class InspeksiItem {
         'lat': lat,
         'lng': lng,
         'fotoPaths': fotoPaths,
+        'mapScreenshotPath': mapScreenshotPath,
         'catatan': catatan,
       };
 
@@ -151,7 +158,7 @@ class InspeksiItem {
         pemanen: map['pemanen']?.toString() ?? '-',
         nikPemanen: map['nikPemanen']?.toString() ?? '-',
         jumlahPokokSampel: (map['jumlahPokokSampel'] as num?)?.toInt() ?? 0,
-        jumlahTandanPanen: (map['jumlahTandanPanen'] as num?)?.toInt() ?? 0,
+        janjangPanen: (map['janjangPanen'] ?? map['jumlahTandanPanen'] as num?)?.toInt() ?? 0,
         brondolanTidakDikutip: (map['brondolanTidakDikutip'] as num?)?.toInt() ?? 0,
         buahMentah: (map['buahMentah'] as num?)?.toInt() ?? 0,
         buahMengkal: (map['buahMengkal'] as num?)?.toInt() ?? 0,
@@ -165,9 +172,12 @@ class InspeksiItem {
         lat: (map['lat'] as num?)?.toDouble(),
         lng: (map['lng'] as num?)?.toDouble(),
         fotoPaths: List<String>.from(map['fotoPaths'] ?? []),
+        mapScreenshotPath: map['mapScreenshotPath']?.toString(),
         catatan: map['catatan']?.toString() ?? '',
       );
 }
+typedef DataMap = Map<String, dynamic>;
+
 class MasterDatabase {
   final String pt;
   final String kebun;
@@ -175,8 +185,8 @@ class MasterDatabase {
   final String asisten;
   final String gasWebhookUrl;
   final List<String> daftarMandor;
-  final List> daftarPemanen;
-  final List> daftarBlok;
+  final List<DataMap> daftarPemanen;
+  final List<DataMap> daftarBlok;
 
   MasterDatabase({
     this.pt = 'PT Kencana Agri (PT. STN)',
@@ -233,10 +243,10 @@ class MasterDatabase {
         gasWebhookUrl: map['gasWebhookUrl'] ?? '',
         daftarMandor: List<String>.from(map['daftarMandor'] ?? []),
         daftarPemanen: (map['daftarPemanen'] as List? ?? [])
-            .map((e) => Map<String, dynamic>.from(e))
+            .map((e) => DataMap.from(e))
             .toList(),
         daftarBlok: (map['daftarBlok'] as List? ?? [])
-            .map((e) => Map<String, dynamic>.from(e))
+            .map((e) => DataMap.from(e))
             .toList(),
       );
     } catch (_) {
@@ -263,10 +273,10 @@ class MasterDatabase {
         gasWebhookUrl: map['gasWebhookUrl'] ?? '',
         daftarMandor: List<String>.from(map['daftarMandor'] ?? []),
         daftarPemanen: (map['daftarPemanen'] as List? ?? [])
-            .map((e) => Map<String, dynamic>.from(e))
+            .map((e) => DataMap.from(e))
             .toList(),
         daftarBlok: (map['daftarBlok'] as List? ?? [])
-            .map((e) => Map<String, dynamic>.from(e))
+            .map((e) => DataMap.from(e))
             .toList(),
       );
 }
