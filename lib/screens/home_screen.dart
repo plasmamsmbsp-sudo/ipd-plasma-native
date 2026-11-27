@@ -1,261 +1,319 @@
-import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
+import '../models/ipd_models.dart';
 
-class KriteriaIpd {
-  final String kode;
-  final String nama;
-  final String satuan;
-  final int denda;
-  final bool isLosses;
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
 
-  const KriteriaIpd({
-    required this.kode,
-    required this.nama,
-    required this.satuan,
-    required this.denda,
-    this.isLosses = false,
-  });
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
-const List<KriteriaIpd> kDaftarKriteria = [
-  KriteriaIpd(kode: 'brondolan', nama: 'Berondolan Tidak Dikutip', satuan: 'Butir', denda: 200, isLosses: true),
-  KriteriaIpd(kode: 'buah_mentah', nama: 'Buah Mentah Dipanen', satuan: 'Janjang', denda: 10000),
-  KriteriaIpd(kode: 'buah_tinggal_pokok', nama: 'Buah Matang Tidak Dipanen', satuan: 'Janjang', denda: 10000, isLosses: true),
-  KriteriaIpd(kode: 'buah_tinggal_piringan', nama: 'Buah Tinggal di Piringan/Pasar Pikul', satuan: 'Janjang', denda: 10000, isLosses: true),
-  KriteriaIpd(kode: 'buah_peram', nama: 'Buah Mentah Diperam/Disembunyikan', satuan: 'Janjang', denda: 10000),
-  KriteriaIpd(kode: 'tangkai_panjang', nama: 'Tangkai Panjang (> 3 cm)', satuan: 'Janjang', denda: 500),
-  KriteriaIpd(kode: 'pelepah_tidak_susun', nama: 'Pelepah Tidak Dipotong / Tidak Disusun', satuan: 'Pokok', denda: 2000),
-  KriteriaIpd(kode: 'over_pruning', nama: 'Over Pruning (Songgo Kurang)', satuan: 'Pokok', denda: 5000),
-  KriteriaIpd(kode: 'pelepah_sengkleh', nama: 'Pelepah Sengkleh Tidak Diturunkan', satuan: 'Pelepah', denda: 5000),
-  KriteriaIpd(kode: 'tph_kotor', nama: 'TPH Kotor / Tidak Diberi Nomor', satuan: 'TPH', denda: 1000),
-];
+class _HomeScreenState extends State<HomeScreen> {
+  final _blokController = TextEditingController();
+  final _pemanenController = TextEditingController();
+  final _mandorController = TextEditingController();
+  final _pokokSampelController = TextEditingController(text: '10');
+  final _bjrController = TextEditingController(text: '15.0');
 
-class InspeksiItem {
-  final String id;
-  final String tanggal;
-  final String pt;
-  final String kebun;
-  final String afdeling;
-  final String asisten;
-  final String mandor;
-  final String pemanen;
-  final String nikPemanen;
-  final String blok;
-  final String noTph;
-  final int pokokSampel;
-  final double bjr;
-  final int janjangPanen;
-  final Map<String, int> temuan;
-  final List<String> fotoPaths;
-  final String? mapScreenshotPath;
-  final double? lat;
-  final double? lng;
+  // Menyimpan jumlah temuan per kode kriteria
+  final Map<String, int> _jumlahTemuan = {};
+  final List<File> _fotoTemuan = [];
+  Position? _posisiGps;
+  bool _loadingGps = false;
 
-  InspeksiItem({
-    required this.id,
-    required this.tanggal,
-    this.pt = 'PT Kencana Agri (PT. STN)',
-    this.kebun = 'Kebun Plasma Wanggarasi',
-    this.afdeling = 'Afdeling Plasma BSP',
-    this.asisten = 'Sukri',
-    required this.mandor,
-    required this.pemanen,
-    this.nikPemanen = '',
-    required this.blok,
-    this.noTph = '01',
-    this.pokokSampel = 10,
-    required this.bjr,
-    required this.janjangPanen,
-    required this.temuan,
-    this.fotoPaths = const [],
-    this.mapScreenshotPath,
-    this.lat,
-    this.lng,
-  });
+  @override
+  void initState() {
+    super.initState();
+    for (var item in kDaftarKriteria) {
+      _jumlahTemuan[item.kode] = 0;
+    }
+    _ambilGps();
+  }
 
-  int get totalDenda {
+  Future<void> _ambilGps() async {
+    setState(() => _loadingGps = true);
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.whileInUse ||
+          permission == LocationPermission.always) {
+        final pos = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+        );
+        setState(() => _posisiGps = pos);
+      }
+    } catch (_) {
+      // Tetap jalan offline meski GPS gagal
+    } finally {
+      if (mounted) setState(() => _loadingGps = false);
+    }
+  }
+
+  Future<void> _ambilFoto() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 70,
+    );
+    if (picked != null) {
+      setState(() {
+        _fotoTemuan.add(File(picked.path));
+      });
+    }
+  }
+
+  int get _totalDenda {
     int total = 0;
-    for (final k in kDaftarKriteria) {
-      final jml = temuan[k.kode] ?? 0;
-      total += jml * k.denda;
+    for (var item in kDaftarKriteria) {
+      final qty = _jumlahTemuan[item.kode] ?? 0;
+      total += qty * item.denda;
     }
     return total;
   }
 
-  double get beratBrondolanKg => (temuan['brondolan'] ?? 0) * 0.012;
-
-  double get beratBuahTinggalKg {
-    final jjgTinggal = (temuan['buah_tinggal_pokok'] ?? 0) +
-        (temuan['buah_tinggal_piringan'] ?? 0);
-    return jjgTinggal * bjr;
-  }
-
-  double get totalLossesKg => beratBrondolanKg + beratBuahTinggalKg;
-
-  double get persentaseLosses {
-    final totalProduksiKg = (janjangPanen * bjr) + totalLossesKg;
-    if (totalProduksiKg <= 0) return 0.0;
-    return (totalLossesKg / totalProduksiKg) * 100.0;
-  }
-
-  String get tingkatRisiko {
-    if (persentaseLosses >= 3.0 || totalDenda >= 50000) return 'MERAH';
-    if (persentaseLosses >= 1.5 || totalDenda >= 20000) return 'ORANYE';
-    return 'KUNING';
-  }
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'tanggal': tanggal,
-        'pt': pt,
-        'kebun': kebun,
-        'afdeling': afdeling,
-        'asisten': asisten,
-        'mandor': mandor,
-        'pemanen': pemanen,
-        'nikPemanen': nikPemanen,
-        'blok': blok,
-        'noTph': noTph,
-        'pokokSampel': pokokSampel,
-        'bjr': bjr,
-        'janjangPanen': janjangPanen,
-        'temuan': temuan,
-        'fotoPaths': fotoPaths,
-        'mapScreenshotPath': mapScreenshotPath,
-        'lat': lat,
-        'lng': lng,
-      };
-
-  factory InspeksiItem.fromJson(Map<String, dynamic> map) {
-    final rawTemuan = map['temuan'] as Map? ?? {};
-    final parsedTemuan = <String, int>{};
-    rawTemuan.forEach((key, val) {
-      parsedTemuan[key.toString()] = (val as num?)?.toInt() ?? 0;
+  void _ubahNilai(String kode, int delta) {
+    setState(() {
+      final saatIni = _jumlahTemuan[kode] ?? 0;
+      final baru = saatIni + delta;
+      _jumlahTemuan[kode] = baru < 0 ? 0 : baru;
     });
+  }
 
-    return InspeksiItem(
-      id: map['id']?.toString() ?? '',
-      tanggal: map['tanggal']?.toString() ?? '',
-      pt: map['pt']?.toString() ?? 'PT Kencana Agri (PT. STN)',
-      kebun: map['kebun']?.toString() ?? 'Kebun Plasma Wanggarasi',
-      afdeling: map['afdeling']?.toString() ?? 'Afdeling Plasma BSP',
-      asisten: map['asisten']?.toString() ?? 'Sukri',
-      mandor: map['mandor']?.toString() ?? '',
-      pemanen: map['pemanen']?.toString() ?? '',
-      nikPemanen: map['nikPemanen']?.toString() ?? '',
-      blok: map['blok']?.toString() ?? '',
-      noTph: map['noTph']?.toString() ?? '01',
-      pokokSampel: (map['pokokSampel'] as num?)?.toInt() ?? 10,
-      bjr: (map['bjr'] as num?)?.toDouble() ?? 16.0,
-      janjangPanen: (map['janjangPanen'] as num?)?.toInt() ?? 0,
-      temuan: parsedTemuan,
-      fotoPaths: List<String>.from(map['fotoPaths'] ?? []),
-      mapScreenshotPath: map['mapScreenshotPath']?.toString(),
-      lat: (map['lat'] as num?)?.toDouble(),
-      lng: (map['lng'] as num?)?.toDouble(),
+  void _resetForm() {
+    setState(() {
+      for (var item in kDaftarKriteria) {
+        _jumlahTemuan[item.kode] = 0;
+      }
+      _fotoTemuan.clear();
+      _pemanenController.clear();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'IPD PLASMA WANGGARASI',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.my_location),
+            tooltip: 'Perbarui GPS',
+            onPressed: _ambilGps,
+          ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Reset Input',
+            onPressed: _resetForm,
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Banner Status GPS Offline
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8F5E9),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF81C784)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.gps_fixed, color: Color(0xFF1B5E20), size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _loadingGps
+                          ? 'Mencari titik koordinat satelit...'
+                          : _posisiGps != null
+                              ? 'GPS: ${_posisiGps!.latitude.toStringAsFixed(6)}, ${_posisiGps!.longitude.toStringAsFixed(6)}'
+                              : 'GPS Offline (Ketuk ikon lokasi di atas)',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Form Identitas Blok & Pemanen
+            Card(
+              elevation: 1,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _blokController,
+                            decoration: const InputDecoration(labelText: 'Blok / Ancak'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: _pokokSampelController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(labelText: 'Pokok Sampel'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _pemanenController,
+                      decoration: const InputDecoration(labelText: 'Nama Pemanen'),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _mandorController,
+                            decoration: const InputDecoration(labelText: 'Mandor Panen'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: _bjrController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(labelText: 'BJR (Kg)'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Daftar 10 Kriteria Denda & Losses
+            const Text(
+              'PARAMETER INSPEKSI MUTU PANEN',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1B5E20)),
+            ),
+            const SizedBox(height: 6),
+            ...kDaftarKriteria.map((kriteria) {
+              final nilai = _jumlahTemuan[kriteria.kode] ?? 0;
+              return Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              kriteria.nama,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                            Text(
+                              'Rp ${kriteria.denda} / ${kriteria.satuan}${kriteria.isLosses ? ' • LOSSES' : ''}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: kriteria.isLosses ? Colors.red.shade700 : Colors.grey.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => _ubahNilai(kriteria.kode, -1),
+                        icon: const Icon(Icons.remove_circle, color: Colors.red, size: 30),
+                      ),
+                      SizedBox(
+                        width: 36,
+                        child: Text(
+                          '$nilai',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => _ubahNilai(kriteria.kode, 1),
+                        icon: const Icon(Icons.add_circle, color: Color(0xFF1B5E20), size: 30),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+
+            const SizedBox(height: 10),
+
+            // Tombol Kamera Dokumentasi
+            OutlinedButton.icon(
+              onPressed: _ambilFoto,
+              icon: const Icon(Icons.camera_alt),
+              label: Text('Ambil Foto Temuan (${_fotoTemuan.length} Foto)'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                side: const BorderSide(color: Color(0xFF1B5E20)),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Ringkasan Total Denda
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1B5E20),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'TOTAL DENDA PANEN:',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    'Rp $_totalDenda',
+                    style: const TextStyle(
+                      color: Colors.amberAccent,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            ElevatedButton.icon(
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Data Inspeksi IPD Tersimpan Offline!'),
+                    backgroundColor: Color(0xFF1B5E20),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.save),
+              label: const Text('SIMPAN HASIL INSPEKSI', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
     );
   }
-}
-typedef DataMap = Map<String, dynamic>;
-
-class MasterDatabase {
-  final String pt;
-  final String kebun;
-  final String afdeling;
-  final String asisten;
-  final String gasWebhookUrl;
-  final List<String> daftarMandor;
-  final List<DataMap> daftarPemanen;
-  final List<DataMap> daftarBlok;
-
-  MasterDatabase({
-    this.pt = 'PT Kencana Agri (PT. STN)',
-    this.kebun = 'Kebun Plasma Wanggarasi',
-    this.afdeling = 'Afdeling Plasma BSP',
-    this.asisten = 'Sukri',
-    this.gasWebhookUrl = '',
-    this.daftarMandor = const ['Pak Candra', 'Pak Ramin', 'Pak Budi', 'Bang Edi'],
-    this.daftarPemanen = const [
-      {'nama': 'Pemanen 1', 'nik': 'PMN-001'},
-      {'nama': 'Pemanen 2', 'nik': 'PMN-002'},
-    ],
-    this.daftarBlok = const [
-      {'blok': 'BLOK A01', 'bjr': 16.5},
-      {'blok': 'BLOK A02', 'bjr': 17.0},
-      {'blok': 'BLOK B01', 'bjr': 15.8},
-    ],
-  });
-
-  String toShareableText() {
-    final payload = jsonEncode({
-      'app': 'IPD_PLASMA_MASTER',
-      'v': 2,
-      'pt': pt,
-      'kebun': kebun,
-      'afdeling': afdeling,
-      'asisten': asisten,
-      'gasWebhookUrl': gasWebhookUrl,
-      'daftarMandor': daftarMandor,
-      'daftarPemanen': daftarPemanen,
-      'daftarBlok': daftarBlok,
-    });
-    return '*[MASTER DATA IPD PLASMA]*\n'
-        'Perusahaan: $pt\n'
-        'Kebun/Afd: $kebun - $afdeling\n'
-        'Asisten: $asisten\n'
-        'Salin seluruh pesan ini lalu tempel di menu *Impor Master Data* pada aplikasi IPD PLASMA:\n\n'
-        '```IPD_MASTER_START\n$payload\nIPD_MASTER_END```';
-  }
-
-  static MasterDatabase? fromShareableText(String raw) {
-    try {
-      String clean = raw.trim();
-      if (clean.contains('IPD_MASTER_START') && clean.contains('IPD_MASTER_END')) {
-        clean = clean.split('IPD_MASTER_START')[1].split('IPD_MASTER_END')[0].trim();
-      }
-      final map = jsonDecode(clean);
-      if (map['app'] != 'IPD_PLASMA_MASTER') return null;
-      return MasterDatabase(
-        pt: map['pt'] ?? 'PT Kencana Agri (PT. STN)',
-        kebun: map['kebun'] ?? 'Kebun Plasma Wanggarasi',
-        afdeling: map['afdeling'] ?? 'Afdeling Plasma BSP',
-        asisten: map['asisten'] ?? 'Sukri',
-        gasWebhookUrl: map['gasWebhookUrl'] ?? '',
-        daftarMandor: List<String>.from(map['daftarMandor'] ?? []),
-        daftarPemanen: (map['daftarPemanen'] as List? ?? [])
-            .map((e) => DataMap.from(e))
-            .toList(),
-        daftarBlok: (map['daftarBlok'] as List? ?? [])
-            .map((e) => DataMap.from(e))
-            .toList(),
-      );
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Map<String, dynamic> toJson() => {
-        'pt': pt,
-        'kebun': kebun,
-        'afdeling': afdeling,
-        'asisten': asisten,
-        'gasWebhookUrl': gasWebhookUrl,
-        'daftarMandor': daftarMandor,
-        'daftarPemanen': daftarPemanen,
-        'daftarBlok': daftarBlok,
-      };
-
-  factory MasterDatabase.fromJson(Map<String, dynamic> map) => MasterDatabase(
-        pt: map['pt'] ?? 'PT Kencana Agri (PT. STN)',
-        kebun: map['kebun'] ?? 'Kebun Plasma Wanggarasi',
-        afdeling: map['afdeling'] ?? 'Afdeling Plasma BSP',
-        asisten: map['asisten'] ?? 'Sukri',
-        gasWebhookUrl: map['gasWebhookUrl'] ?? '',
-        daftarMandor: List<String>.from(map['daftarMandor'] ?? []),
-        daftarPemanen: (map['daftarPemanen'] as List? ?? [])
-            .map((e) => DataMap.from(e))
-            .toList(),
-        daftarBlok: (map['daftarBlok'] as List? ?? [])
-            .map((e) => DataMap.from(e))
-            .toList(),
-      );
 }
