@@ -2,7 +2,35 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
-import '../models/ipd_models.dart';
+
+class _KriteriaItem {
+  final String kode;
+  final String nama;
+  final String satuan;
+  final int denda;
+  final bool isLosses;
+
+  const _KriteriaItem({
+    required this.kode,
+    required this.nama,
+    required this.satuan,
+    required this.denda,
+    this.isLosses = false,
+  });
+}
+
+const List<_KriteriaItem> _daftarKriteria = [
+  _KriteriaItem(kode: 'brondolan', nama: 'Berondolan Tidak Dikutip', satuan: 'Butir', denda: 200, isLosses: true),
+  _KriteriaItem(kode: 'buah_mentah', nama: 'Buah Mentah Dipanen', satuan: 'Janjang', denda: 10000),
+  _KriteriaItem(kode: 'buah_tinggal_pokok', nama: 'Buah Matang Tidak Dipanen', satuan: 'Janjang', denda: 10000, isLosses: true),
+  _KriteriaItem(kode: 'buah_tinggal_piringan', nama: 'Buah Tinggal di Piringan/Pasar Pikul', satuan: 'Janjang', denda: 10000, isLosses: true),
+  _KriteriaItem(kode: 'buah_peram', nama: 'Buah Mentah Diperam/Disembunyikan', satuan: 'Janjang', denda: 10000),
+  _KriteriaItem(kode: 'tangkai_panjang', nama: 'Tangkai Panjang (> 3 cm)', satuan: 'Janjang', denda: 500),
+  _KriteriaItem(kode: 'pelepah_tidak_susun', nama: 'Pelepah Tidak Dipotong / Tidak Disusun', satuan: 'Pokok', denda: 2000),
+  _KriteriaItem(kode: 'over_pruning', nama: 'Over Pruning (Songgo Kurang)', satuan: 'Pokok', denda: 5000),
+  _KriteriaItem(kode: 'pelepah_sengkleh', nama: 'Pelepah Sengkleh Tidak Diturunkan', satuan: 'Pelepah', denda: 5000),
+  _KriteriaItem(kode: 'tph_kotor', nama: 'TPH Kotor / Tidak Diberi Nomor', satuan: 'TPH', denda: 1000),
+];
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -18,7 +46,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final _pokokSampelController = TextEditingController(text: '10');
   final _bjrController = TextEditingController(text: '15.0');
 
-  // Menyimpan jumlah temuan per kode kriteria
   final Map<String, int> _jumlahTemuan = {};
   final List<File> _fotoTemuan = [];
   Position? _posisiGps;
@@ -27,7 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    for (var item in kDaftarKriteria) {
+    for (var item in _daftarKriteria) {
       _jumlahTemuan[item.kode] = 0;
     }
     _ambilGps();
@@ -69,7 +96,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   int get _totalDenda {
     int total = 0;
-    for (var item in kDaftarKriteria) {
+    for (var item in _daftarKriteria) {
       final qty = _jumlahTemuan[item.kode] ?? 0;
       total += qty * item.denda;
     }
@@ -86,7 +113,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _resetForm() {
     setState(() {
-      for (var item in kDaftarKriteria) {
+      for (var item in _daftarKriteria) {
         _jumlahTemuan[item.kode] = 0;
       }
       _fotoTemuan.clear();
@@ -120,7 +147,6 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Banner Status GPS Offline
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
@@ -146,8 +172,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             const SizedBox(height: 12),
-
-            // Form Identitas Blok & Pemanen
             Card(
               elevation: 1,
               child: Padding(
@@ -201,14 +225,12 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             const SizedBox(height: 12),
-
-            // Daftar 10 Kriteria Denda & Losses
             const Text(
               'PARAMETER INSPEKSI MUTU PANEN',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1B5E20)),
             ),
             const SizedBox(height: 6),
-            ...kDaftarKriteria.map((kriteria) {
+            ..._daftarKriteria.map((kriteria) {
               final nilai = _jumlahTemuan[kriteria.kode] ?? 0;
               return Card(
                 margin: const EdgeInsets.only(bottom: 8),
@@ -255,10 +277,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               );
             }),
-
             const SizedBox(height: 10),
-
-            // Tombol Kamera Dokumentasi
             OutlinedButton.icon(
               onPressed: _ambilFoto,
               icon: const Icon(Icons.camera_alt),
@@ -268,10 +287,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 side: const BorderSide(color: Color(0xFF1B5E20)),
               ),
             ),
-
             const SizedBox(height: 16),
-
-            // Ringkasan Total Denda
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -297,7 +313,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             const SizedBox(height: 12),
-
             ElevatedButton.icon(
               onPressed: () {
                 ScaffoldMessenger.of(context).showSnackBar(
